@@ -1,10 +1,10 @@
-# DalFs: an Userspace filesystem based on OpenDAL
+# DalFs: a Userspace filesystem based on OpenDAL
 
-**Still a WIP!!! Could be buggy and risky, please use an VM to test.** Take your own risk.
+**Still a WIP!!! Could be buggy and risky, please use a VM to test.** Take your own risk.
 
 This project largely refers to [netfuse](https://github.com/anowell/netfuse) project, but will be refactored soon.
 
-Currently, it can provide an Userspace filesystem backing by [OpenDAL](https://github.com/apache/incubator-opendal), thus supports the following backend as data sources (some of them will be supported after upgrading OpenDAL):
+Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://github.com/apache/incubator-opendal), thus supports the following backend as data sources (some of them will be supported after upgrading OpenDAL):
 
 - Azblob
 - Azdfs
