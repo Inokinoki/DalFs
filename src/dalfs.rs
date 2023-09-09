@@ -7,6 +7,8 @@ use opendal::BlockingOperator;
 use libc::ENOENT;
 use std::ffi::OsStr;
 
+use crate::inode;
+
 const TTL: Timespec = Timespec { sec: 1, nsec: 0 };                     // 1 second
 
 const CREATE_TIME: Timespec = Timespec { sec: 1381237736, nsec: 0 };    // 2013-10-08 08:56
@@ -65,6 +67,7 @@ const TEST_TXT_ATTR: FileAttr = FileAttr {
 
 pub struct DalFs {
     pub op: BlockingOperator,
+    pub inodes: InodeStore,
 }
 
 impl Filesystem for DalFs {

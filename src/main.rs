@@ -10,6 +10,7 @@ use opendal::services::Fs;
 use std::env;
 
 mod dalfs;
+mod inode;
 
 fn main() -> Result<()> {
     let op = init_operator_via_builder()?.blocking();
