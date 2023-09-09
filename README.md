@@ -89,7 +89,8 @@ Currently only `fs` backend is tested. For example, the following command will m
 cargo run <mount-point> fs root=/tmp
 ```
 
-<img width="1185" alt="image" src="https://github.com/Inokinoki/DalFs/assets/8311300/35c08a79-d6e6-4002-96e7-df91a24582d3">
+<img width="1185" alt="image" src="https://github.com/Inokinoki/DalFs/assets/8311300/c591ffe1-be35-4c79-8ffa-368c66872b9f">
+
 
 For more details, please check [OpenDAL scheme doc](https://opendal.apache.org/docs/rust/opendal/enum.Scheme.html).
 
