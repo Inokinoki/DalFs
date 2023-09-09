@@ -47,17 +47,19 @@ Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://gi
 
 The functionnality is very limited right now, because I just use several hours to come up with the idea and implement it.
 
-Here are the main fs functionnalities implemented or not yet implemented:
+Here are the main fs functionnalities implemented:
 
-[x] Read directory
-[x] Read file
-[x] Read attributes (not well implemented)
-[ ] Create directory
-[ ] Permission (?)
-[ ] Create file
-[ ] Write file
-[ ] Fsync (?)
-[ ] ...
+- Read directory
+- Read file
+- Read attributes (not well implemented)
+
+or not yet implemented:
+- Create directory
+- Permission (?)
+- Create file
+- Write file
+- Fsync (?)
+- ...
 
 ## Build
 
