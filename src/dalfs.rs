@@ -72,12 +72,25 @@ pub struct DalFs {
 
 impl Filesystem for DalFs {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        if parent == 1 && name.to_str() == Some("he.txt")  {
-            reply.entry(&TTL, &HELLO_TXT_ATTR, 0);
-        } else if parent == 1 && name.to_str() == Some("test.txt") {
-            reply.entry(&TTL, &TEST_TXT_ATTR, 0);
-        } else {
-            reply.error(ENOENT);
+        let name_str = name.to_str().unwrap();
+        println!("lookup(parent={}, name=\"{}\")", parent, name_str);
+
+        match self.inodes.child(parent, &name).cloned() {
+            Some(child_inode) => reply.entry(&TTL, &child_inode.attr, 0),
+            None => {
+                let parent_inode = self.inodes[parent].clone();
+                let child_path = parent_inode.path.join(&name).as_path().display().to_string();
+                match self.op.stat(&child_path) {
+                    Ok(child_metadata) => {
+                        let inode = self.inodes.insert_metadata(&child_path, &child_metadata);
+                        reply.entry(&TTL, &inode.attr, 0)
+                    }
+                    Err(err) => {
+                        println!("{}", err);
+                        reply.error(ENOENT)
+                    }
+                }
+            }
         }
     }
 
