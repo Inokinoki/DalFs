@@ -122,12 +122,41 @@ impl Filesystem for DalFs {
         }
     }
 
-    fn read(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, _size: u32, reply: ReplyData) {
-        if ino == 2 {
-            reply.data(&HELLO_TXT_CONTENT.as_bytes()[offset as usize..]);
-        } else {
-            reply.error(ENOENT);
-        }
+    fn read(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
+        println!("read(ino={}, fh={}, offset={}, size={})", ino, _fh, offset, size);
+
+        match self.inodes.get(ino) {
+            Some(inode) => {
+                let path = Path::new(&inode.path);
+                let result = self.op.read(path.to_str().unwrap());
+
+                match result {
+                    Ok(buffer) => {
+                        // Return the read data
+                        let end_offset = offset + size as i64;
+                        match buffer.len() {
+                            len if len as i64 > offset + size as i64 => {
+                                reply.data(&buffer[(offset as usize)..(end_offset as usize)]);
+                            }
+                            len if len as i64 > offset => {
+                                reply.data(&buffer[(offset as usize)..]);
+                            }
+                            len => {
+                                println!("attempted read beyond buffer for ino {} len={} offset={} size={}", ino, len, offset, size);
+                                reply.error(ENOENT);
+                            }
+                        }
+                    },
+                    Err(_) => {
+                        reply.error(ENOENT);
+                    },
+                };
+            },
+            None => {
+                // FS will firstly lookup and then read inode, so inode should be there
+                reply.error(ENOENT);
+            },
+        };
     }
 
     fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
