@@ -6,6 +6,8 @@ use opendal::BlockingOperator;
 
 use libc::ENOENT;
 use std::ffi::OsStr;
+use std::ffi::OsString;
+use std::path::Path;
 
 use crate::inode;
 
@@ -70,6 +72,24 @@ pub struct DalFs {
     pub inodes: inode::InodeStore,
 }
 
+fn get_basename(path: &Path) -> &OsStr {
+    path.file_name().expect("missing filename")
+}
+
+pub type LibcError = libc::c_int;
+
+impl DalFs {
+    fn cache_readdir<'a>(&'a mut self, ino: u64) -> Box<dyn Iterator<Item=Result<(OsString, FileAttr), LibcError>> + 'a> {
+        let iter = self.inodes
+            .children(ino)
+            .into_iter()
+            .map( move |child| {
+                Ok((get_basename(&child.path).into(), child.attr.clone()))
+            });
+        Box::new(iter)
+    }
+}
+
 impl Filesystem for DalFs {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         let name_str = name.to_str().unwrap();
@@ -111,37 +131,72 @@ impl Filesystem for DalFs {
     }
 
     fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
-        if ino == 1 {
-            if offset == 0 {
-                reply.add(1, 0, FileType::Directory, ".");
-                reply.add(1, 1, FileType::Directory, "..");
-                reply.add(2, 2, FileType::Directory, "he.txt");
-                // dal_listdir(reply);
-                let entries = self.op.list("/").unwrap();
-                let mut inode = 3;
-                let mut offset: i64 = 3;
-                for result in entries {
-                    let entry = result.unwrap();
-                    let metadata = self.op.stat(entry.path()).unwrap();
-                    match metadata.mode() {
-                        EntryMode::FILE => {
-                            println!("Handling file");
-                            reply.add(inode, offset, FileType::RegularFile, entry.name());
-                        }
-                        EntryMode::DIR => {
-                            println!("Handling dir {} {}", entry.path(), entry.name());
-                            reply.add(inode, offset, FileType::Directory, entry.name());
-                        }
-                        EntryMode::Unknown => continue,
-                    }
+        println!("readdir(ino={}, fh={}, offset={})", ino, _fh, offset);
+        if offset > 0 {
+            // TODO: Support offset
+            reply.ok();
+            return;
+        }
 
-                    inode += 1;
-                    offset += 1;
+        let parent_ino = match ino {
+            1 => 1,
+            _ => self.inodes.parent(ino).expect("inode has no parent").attr.ino,
+        };
+
+        reply.add(ino, 0, FileType::Directory, ".");
+        reply.add(parent_ino, 1, FileType::Directory, "..");
+
+        let dir_visited  = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
+        match dir_visited {
+            // read directory from cache
+            true =>  {
+                for (i, next) in self.cache_readdir(ino).enumerate().skip(offset as usize) {
+                    match next {
+                        Ok((filename, attr)) => {
+                            reply.add(attr.ino, i as i64 + offset + 2, attr.kind, &filename);
+                        }
+                        Err(err) => { return reply.error(err); }
+                    }
+                }
+            },
+            // read directory from OpenDAL and save to cache
+            false => {
+                let ref parent_path = self.inodes[ino].path.clone();
+
+                let entries = self.op.list(parent_path.to_str().unwrap()).unwrap();
+                for (index, result) in entries.into_iter().enumerate().skip(offset as usize) {
+                    match result {
+                        Ok(entry) => {
+                            let metadata = self.op.stat(entry.path()).unwrap();
+                            let child_path = parent_path.join(entry.name());
+                            let inode = self.inodes.insert_metadata(&child_path, &metadata);
+                            reply.add(inode.attr.ino, index as i64 + offset + 2, inode.attr.kind, entry.name());
+        
+                            match metadata.mode() {
+                                EntryMode::FILE => {
+                                    println!("Handling file");
+                                    // reply.add(inode, i + offset + 2, FileType::RegularFile, child_path);
+                                }
+                                EntryMode::DIR => {
+                                    println!("Handling dir {} {}", entry.path(), entry.name());
+                                    // reply.add(inode, i + offset + 2, FileType::Directory, child_path);
+                                }
+                                EntryMode::Unknown => continue,
+                            };
+                        },
+                        Err(..) => {
+                            return reply.error(ENOENT);
+                        },
+                    };
                 }
             }
-            reply.ok();
-        } else {
-            reply.error(ENOENT);
-        }
+        };
+
+        // Mark this node visited
+        let mut inodes = &mut self.inodes;
+        let mut dir_inode = inodes.get_mut(ino).expect("inode missing for dir just listed");
+        dir_inode.visited = true;
+
+        reply.ok();
     }
 }
