@@ -6,7 +6,9 @@ use std::ops::{Index, IndexMut};
 use time;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use super::Metadata;
+use opendal::Metadata;
+use opendal::EntryMode;
+use time::Timespec;
 
 #[derive(Debug, Clone)]
 pub struct Inode {
@@ -85,18 +87,28 @@ impl InodeStore {
         });
 
 
-        debug!("insert metadata: {} {}", ino, path.as_ref().display());
+        println!("insert metadata: {} {}", ino, path.as_ref().display());
 
+        let last_modified_datetime = metadata.last_modified().unwrap();
+        let ts = Timespec {
+            sec: last_modified_datetime.timestamp(),
+            nsec: last_modified_datetime.timestamp_subsec_nanos() as i32,
+        };
         let attr = FileAttr {
             ino: ino,
-            size: metadata.size,
+            size: metadata.content_length(),
             blocks: 0,
-            atime: metadata.atime,
-            mtime: metadata.mtime,
-            ctime: metadata.ctime,
-            crtime: metadata.crtime,
-            kind: metadata.kind,
-            perm: metadata.perm,
+            atime: ts,
+            mtime: ts,
+            ctime: ts,
+            crtime: ts,
+            kind: match metadata.mode() {
+                EntryMode::FILE => FileType::RegularFile,
+                EntryMode::DIR => FileType::Directory,
+                // TODO: We do not know how to handle it
+                EntryMode::Unknown => FileType::RegularFile,
+            },
+            perm: 0o550,
             nlink: 0,
             uid: self.uid,
             gid: self.gid,
@@ -171,7 +183,7 @@ impl InodeStore {
                 panic!("Corrupted inode store: reinserted conflicting ino {} (path={}, oldpath={})",
                         ino, path.display(), old_inode.path.display());
             } else {
-                debug!("Updating ino {} at path {}", ino, path.display());
+                println!("Updating ino {} at path {}", ino, path.display());
             }
 
         }

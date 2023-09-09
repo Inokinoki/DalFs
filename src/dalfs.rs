@@ -67,7 +67,7 @@ const TEST_TXT_ATTR: FileAttr = FileAttr {
 
 pub struct DalFs {
     pub op: BlockingOperator,
-    pub inodes: InodeStore,
+    pub inodes: inode::InodeStore,
 }
 
 impl Filesystem for DalFs {

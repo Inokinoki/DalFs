@@ -18,6 +18,7 @@ fn main() -> Result<()> {
 
     let fs = dalfs::DalFs {
         op: op,
+        inodes: inode::InodeStore::new(0o550, 1000, 1000),  // Temporarilly hardcode
     };
 
     env_logger::init();
