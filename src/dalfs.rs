@@ -81,10 +81,33 @@ impl Filesystem for DalFs {
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
+        println!("getattr(ino={})", ino);
         // TODO: Allow to read more attr
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
-            _ => reply.error(ENOENT),
+            _ => {
+                match self.inodes.get(ino) {
+                    Some(_) => {
+                        reply.attr(&TTL,  &FileAttr {
+                            ino: ino,
+                            size: 0,
+                            blocks: 0,
+                            atime: CREATE_TIME,
+                            mtime: CREATE_TIME,
+                            ctime: CREATE_TIME,
+                            crtime: CREATE_TIME,
+                            kind: FileType::Directory,
+                            perm: 0o755,
+                            nlink: 2,
+                            uid: 1000,
+                            gid: 1000,
+                            rdev: 0,
+                            flags: 0,
+                        });
+                    },
+                    None => reply.error(ENOENT),
+                };
+            },
         }
     }
 
