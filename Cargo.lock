@@ -269,6 +269,7 @@ dependencies = [
  "futures",
  "libc",
  "opendal",
+ "sequence_trie",
  "time 0.1.45",
  "tokio",
 ]
@@ -1434,6 +1435,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "sequence_trie"
+version = "0.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5b4eb0f7d1ff9b9666d8b8ff543f3705dd464025269a5b0e1988ffa60ca1be8"
 
 [[package]]
 name = "serde"
