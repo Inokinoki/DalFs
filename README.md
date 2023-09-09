@@ -1,6 +1,6 @@
 # DalFs: an Userspace filesystem based on OpenDAL
 
-Still a WIP!!!
+**Still a WIP!!! Could be buggy and risky, please use an VM to test.** Take your own risk.
 
 This project largely refers to [netfuse](https://github.com/anowell/netfuse) project, but will be refactored soon.
 
