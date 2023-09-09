@@ -5,6 +5,7 @@ use opendal::EntryMode;
 use opendal::BlockingOperator;
 
 use libc::ENOENT;
+use libc::EACCES;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
@@ -157,7 +158,10 @@ impl Filesystem for DalFs {
             false => {
                 let ref parent_path = self.inodes[ino].path.clone();
 
-                let entries = self.op.list(parent_path.to_str().unwrap()).unwrap();
+                let entries = match self.op.list(parent_path.to_str().unwrap()) {
+                    Ok(entries)  => entries,
+                    Err(e) => return reply.error(EACCES),
+                };
                 for (index, result) in entries.into_iter().enumerate().skip(offset as usize) {
                     match result {
                         Ok(entry) => {
