@@ -26,43 +26,8 @@ const HELLO_DIR_ATTR: FileAttr = FileAttr {
     kind: FileType::Directory,
     perm: 0o755,
     nlink: 2,
-    uid: 501,
-    gid: 20,
-    rdev: 0,
-    flags: 0,
-};
-
-const HELLO_TXT_CONTENT: &'static str = "Hello World!\n";
-
-const HELLO_TXT_ATTR: FileAttr = FileAttr {
-    ino: 2,
-    size: 13,
-    blocks: 1,
-    atime: CREATE_TIME,
-    mtime: CREATE_TIME,
-    ctime: CREATE_TIME,
-    crtime: CREATE_TIME,
-    kind: FileType::RegularFile,
-    perm: 0o644,
-    nlink: 1,
-    uid: 501,
-    gid: 20,
-    rdev: 0,
-    flags: 0,
-};
-const TEST_TXT_ATTR: FileAttr = FileAttr {
-    ino: 3,
-    size: 13,
-    blocks: 1,
-    atime: CREATE_TIME,
-    mtime: CREATE_TIME,
-    ctime: CREATE_TIME,
-    crtime: CREATE_TIME,
-    kind: FileType::RegularFile,
-    perm: 0o644,
-    nlink: 1,
-    uid: 501,
-    gid: 20,
+    uid: 1000,
+    gid: 1000,
     rdev: 0,
     flags: 0,
 };
@@ -115,9 +80,9 @@ impl Filesystem for DalFs {
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
+        // TODO: Allow to read more attr
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
-            2 => reply.attr(&TTL, &HELLO_TXT_ATTR),
             _ => reply.error(ENOENT),
         }
     }
