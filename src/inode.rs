@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use opendal::Metadata;
 use opendal::EntryMode;
 use time::Timespec;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
 pub struct Inode {
@@ -89,11 +90,17 @@ impl InodeStore {
 
         println!("insert metadata: {} {}", ino, path.as_ref().display());
 
-        let last_modified_datetime = metadata.last_modified().unwrap();
-        let ts = Timespec {
-            sec: last_modified_datetime.timestamp(),
-            nsec: last_modified_datetime.timestamp_subsec_nanos() as i32,
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+        let mut ts = Timespec {
+            sec: now.as_secs() as i64,
+            nsec: now.subsec_nanos() as i32,
         };
+        if let Some(last_modified_datetime) = metadata.last_modified() {
+            ts = Timespec {
+                sec: last_modified_datetime.timestamp(),
+                nsec: last_modified_datetime.timestamp_subsec_nanos() as i32,
+            };
+        }
         let attr = FileAttr {
             ino: ino,
             size: metadata.content_length(),
