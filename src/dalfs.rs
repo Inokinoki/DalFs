@@ -150,10 +150,14 @@ impl Filesystem for DalFs {
 
     fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         println!("readdir(ino={}, fh={}, offset={})", ino, _fh, offset);
-        if offset > 0 {
-            // TODO: Support offset
-            reply.ok();
-            return;
+
+        let dir_visited = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
+        if dir_visited {
+            let cached_dir = self.cache_readdir(ino);
+            if offset as usize > cached_dir.enumerate().count() {
+                reply.ok();
+                return;
+            }
         }
 
         let parent_ino = match ino {
@@ -164,7 +168,6 @@ impl Filesystem for DalFs {
         reply.add(ino, 0, FileType::Directory, ".");
         reply.add(parent_ino, 1, FileType::Directory, "..");
 
-        let dir_visited  = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
         match dir_visited {
             // read directory from cache
             true =>  {
