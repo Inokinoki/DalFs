@@ -2,6 +2,7 @@ use time::Timespec;
 use fuse::{FileType, FileAttr, Filesystem, Request, ReplyData, ReplyEntry, ReplyAttr, ReplyDirectory};
 
 use opendal::EntryMode;
+use opendal::Metadata;
 use opendal::BlockingOperator;
 
 use libc::ENOENT;
@@ -144,6 +145,25 @@ impl Filesystem for DalFs {
             None => {
                 // FS will firstly lookup and then read inode, so inode should be there
                 reply.error(ENOENT);
+            },
+        };
+    }
+
+    fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
+        println!("mkdir(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
+
+        let path_ref = self.inodes[parent].path.join(&name);
+        let path = path_ref.to_str().unwrap();
+        match self.op.create_dir(&(path.to_string() + "/")) {
+            Ok(_) => {
+                let mut meta = Metadata::new(EntryMode::DIR);
+                let mut attr = self.inodes.insert_metadata(&path, &meta).attr;
+                attr.perm = _mode as u16;
+                reply.entry(&TTL, &attr, 0);
+            },
+            Err(err) => {
+                println!("mkdir error - {}", err);
+                reply.error(EACCES);
             },
         };
     }
