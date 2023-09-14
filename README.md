@@ -52,11 +52,11 @@ Here are the main fs functionnalities implemented:
 - Read directory
 - Read file
 - Read attributes (not well implemented)
+- Create directory
+- Create file
 
 or not yet implemented:
-- Create directory
 - Permission (?)
-- Create file
 - Write file
 - Fsync (?)
 - ...
