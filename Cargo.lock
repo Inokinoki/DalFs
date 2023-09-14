@@ -264,6 +264,7 @@ name = "dalfs"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "env_logger",
  "fuse",
  "futures",

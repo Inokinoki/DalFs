@@ -1,5 +1,17 @@
 use time::Timespec;
-use fuse::{FileType, FileAttr, Filesystem, Request, ReplyData, ReplyEntry, ReplyAttr, ReplyDirectory};
+use fuse::{
+    FileType,
+    FileAttr,
+    Filesystem,
+    Request,
+    ReplyData,
+    ReplyEntry,
+    ReplyAttr,
+    ReplyDirectory,
+    ReplyEmpty,
+    ReplyWrite,
+    ReplyOpen,
+};
 
 use opendal::EntryMode;
 use opendal::Metadata;
@@ -10,6 +22,15 @@ use libc::EACCES;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
+
+use chrono::DateTime;
+use chrono::Utc;
+use std::time::{
+    SystemTime,
+    Duration,
+    UNIX_EPOCH,
+};
+use std::result::Result;
 
 use crate::inode;
 
@@ -41,6 +62,13 @@ pub struct DalFs {
 
 fn get_basename(path: &Path) -> &OsStr {
     path.file_name().expect("missing filename")
+}
+
+// Derivated from OpenDAL util
+pub fn parse_datetime_from_from_timestamp_millis(s: i64) -> DateTime<Utc> {
+    let st = UNIX_EPOCH
+        .checked_add(Duration::from_millis(s as u64)).unwrap();
+    st.into()
 }
 
 pub type LibcError = libc::c_int;
@@ -242,5 +270,63 @@ impl Filesystem for DalFs {
         dir_inode.visited = true;
 
         reply.ok();
+    }
+
+    fn mknod(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, _rdev: u32, reply: ReplyEntry) {
+        println!("mknod(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
+
+        // TODO: check if we have write access to this dir in OpenDAL
+        let path = self.inodes[parent].path.join(&name);
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+
+        let mut meta = Metadata::new(EntryMode::FILE);
+        meta.set_last_modified(
+            parse_datetime_from_from_timestamp_millis(
+                now.as_secs() as i64 * 1000 + now.subsec_millis() as i64
+            )
+        );
+        meta.set_content_length(0);
+
+        // FIXME: cloning because it's quick-and-dirty
+        let attr = self.inodes.insert_metadata(&Path::new(&path), &meta).attr.clone();
+
+        let pathStr = path.to_str().unwrap();
+        match self.op.write(pathStr, vec!()) {
+            Ok(_) => reply.entry(&TTL, &attr, 0),
+            Err(_) => reply.error(ENOENT),
+        };
+    }
+
+    fn open(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
+        println!("open(ino={}, flags=0x{:x})", ino, flags);
+
+        match self.inodes.get(ino) {
+            Some(inode) => {
+                reply.opened(0, flags);
+            },
+            None => reply.error(ENOENT),
+        };
+    }
+
+    fn setattr(&mut self, _req: &Request, ino: u64, _mode: Option<u32>, uid: Option<u32>, gid: Option<u32>,
+        size: Option<u64>, _atime: Option<Timespec>, _mtime: Option<Timespec>, _fh: Option<u64>,
+        _crtime: Option<Timespec>, _chgtime: Option<Timespec>, _bkuptime: Option<Timespec>, flags: Option<u32>, reply: ReplyAttr) {
+        println!("setattr(ino={}, mode={:?}, size={:?}, fh={:?}, flags={:?})", ino, _mode, size, _fh, flags);
+        match self.inodes.get_mut(ino) {
+            Some(mut inode) => {
+                if let Some(new_size) = size {
+                    inode.attr.size = new_size;
+                }
+                if let Some(new_uid) = uid {
+                    inode.attr.uid = new_uid;
+                }
+                if let Some(new_gid) = gid {
+                    inode.attr.gid = new_gid;
+                }
+                // TODO: is mode (u32) equivalent to attr.perm (u16)?
+                reply.attr(&TTL, &inode.attr);
+            }
+            None => reply.error(ENOENT)
+        }
     }
 }
