@@ -11,6 +11,7 @@ use fuse::{
     ReplyEmpty,
     ReplyWrite,
     ReplyOpen,
+    ReplyCreate,
 };
 
 use opendal::EntryMode;
@@ -19,6 +20,7 @@ use opendal::BlockingOperator;
 
 use libc::ENOENT;
 use libc::EACCES;
+use libc::ENOSYS;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
@@ -302,6 +304,7 @@ impl Filesystem for DalFs {
 
         match self.inodes.get(ino) {
             Some(inode) => {
+                // TODO: Create reader and/or writer
                 reply.opened(0, flags);
             },
             None => reply.error(ENOENT),
@@ -328,5 +331,50 @@ impl Filesystem for DalFs {
             }
             None => reply.error(ENOENT)
         }
+    }
+
+    fn write(&mut self, _req: &Request, ino: u64, fh: u64, offset: i64, data: &[u8], flags: u32, reply: ReplyWrite) {
+        // TODO: check if in read-only mode: reply EROFS
+        println!("write(ino={}, fh={}, offset={}, len={}, flags=0x{:x})", ino, fh, offset, data.len(), flags);
+
+        let is_replace = (offset == 0) && (self.inodes.get(ino).unwrap().attr.size < data.len() as u64);
+
+        // TODO: Open a reader and flush all data to writer if not replace
+
+        let new_size = match self.inodes.get_mut(ino) {
+            Some(mut inode) => {
+                match self.op.write(inode.path.to_str().unwrap(), data.to_vec()) {
+                    Ok(_) => {
+                        reply.written(data.len() as u32);
+                        data.len() as u64
+                    },
+                    Err(_) => {
+                        println!("Writing failed");
+                        reply.error(ENOENT);
+                        0
+                    },
+                }
+            },
+            None => {
+                println!("write failed to read file");
+                reply.error(ENOENT);
+                return;
+            },
+        };
+
+        let ref mut inode = self.inodes[ino];
+        inode.attr.size = new_size;
+    }
+
+    fn flush(&mut self, _req: &Request<'_>, ino: u64, fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
+        println!("flush(ino={}, fh={})", ino, fh);
+        // TODO: find a way to flush reader and/or writer
+        reply.error(ENOSYS);
+    }
+
+    fn release(&mut self, _req: &Request<'_>, ino: u64, fh: u64, flags: u32, _lock_owner: u64, flush: bool, reply: ReplyEmpty) {
+        println!("release(ino={}, fh={}, flags={}, flush={})", ino, fh, flags, flush);
+        // TODO: close writer and reader
+        reply.ok();
     }
 }

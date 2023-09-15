@@ -54,10 +54,10 @@ Here are the main fs functionnalities implemented:
 - Read attributes (not well implemented)
 - Create directory
 - Create file
+- Write file
 
 or not yet implemented:
 - Permission (?)
-- Write file
 - Fsync (?)
 - ...
 
