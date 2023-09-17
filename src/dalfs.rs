@@ -339,31 +339,81 @@ impl Filesystem for DalFs {
 
         let is_replace = (offset == 0) && (self.inodes.get(ino).unwrap().attr.size < data.len() as u64);
 
-        // TODO: Open a reader and flush all data to writer if not replace
+        // Open a reader and flush all data to writer if not replace
+        if !is_replace {
+            match self.inodes.get_mut(ino) {
+                Some(mut inode) => {
+                    // We assume to have reading perm with writing perm
+                    let original_data = match self.op.read(inode.path.to_str().unwrap()) {
+                        Ok(d) => d, // TODO: Do not copy all data
+                        Err(_) => {
+                            println!("Reading failed");
+                            reply.error(ENOENT);
+                            return;
+                        },
+                    };
+                    let mut new_size = original_data.len() as u64;
+                    // TODO: Validate the length
 
-        let new_size = match self.inodes.get_mut(ino) {
-            Some(mut inode) => {
-                match self.op.write(inode.path.to_str().unwrap(), data.to_vec()) {
-                    Ok(_) => {
-                        reply.written(data.len() as u32);
-                        data.len() as u64
-                    },
-                    Err(_) => {
-                        println!("Writing failed");
-                        reply.error(ENOENT);
-                        0
-                    },
-                }
-            },
-            None => {
-                println!("write failed to read file");
-                reply.error(ENOENT);
-                return;
-            },
-        };
+                    let mut writer = match self.op.writer(inode.path.to_str().unwrap()) {
+                        Ok(writer) => writer,
+                        Err(_) => {
+                            println!("Writing failed");
+                            reply.error(ENOENT);
+                            return;
+                        },
+                    };
 
-        let ref mut inode = self.inodes[ino];
-        inode.attr.size = new_size;
+                    let _ = writer.write(original_data);
+                    // Write new content
+                    new_size = new_size + match writer.write(data.to_vec()) {
+                        Ok(_) => {
+                            reply.written(data.len() as u32);
+                            data.len() as u64
+                        },
+                        Err(_) => {
+                            println!("Writing failed");
+                            reply.error(ENOENT);
+                            0
+                        },
+                    };
+
+                    let _ = writer.close();
+                    inode.attr.size = new_size;
+                    return;
+                },
+                None => {
+                    println!("reading failed");
+                    reply.error(ENOENT);
+                    return;
+                },
+            }
+        } else {
+            // Replace the file
+            let new_size = match self.inodes.get_mut(ino) {
+                Some(mut inode) => {
+                    match self.op.write(inode.path.to_str().unwrap(), data.to_vec()) {
+                        Ok(_) => {
+                            reply.written(data.len() as u32);
+                            data.len() as u64
+                        },
+                        Err(_) => {
+                            println!("Writing failed");
+                            reply.error(ENOENT);
+                            0
+                        },
+                    }
+                },
+                None => {
+                    println!("write failed to read file");
+                    reply.error(ENOENT);
+                    return;
+                },
+            };
+
+            let ref mut inode = self.inodes[ino];
+            inode.attr.size = new_size;
+        }
     }
 
     fn flush(&mut self, _req: &Request<'_>, ino: u64, fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
