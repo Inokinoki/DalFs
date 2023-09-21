@@ -21,6 +21,7 @@ use opendal::BlockingOperator;
 use libc::ENOENT;
 use libc::EACCES;
 use libc::ENOSYS;
+use libc::EIO;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
@@ -426,5 +427,25 @@ impl Filesystem for DalFs {
         println!("release(ino={}, fh={}, flags={}, flush={})", ino, fh, flags, flush);
         // TODO: close writer and reader
         reply.ok();
+    }
+
+    fn unlink(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
+        println!("unlink(parent={}, name={:?})", parent, name);
+
+        let ino_opt = self.inodes.child(parent, &name).map(|inode| inode.attr.ino);
+        let path_ref = self.inodes[parent].path.join(&name);
+        let path = path_ref.to_str().unwrap();
+        match self.op.delete(path) {
+            Ok(_) => {
+                ino_opt.map(|ino| {
+                    self.inodes.remove(ino);
+                });
+                reply.ok()
+            },
+            Err(err) => {
+                println!("Delete failed: {}", err);
+                reply.error(EIO);
+            }
+        }
     }
 }
