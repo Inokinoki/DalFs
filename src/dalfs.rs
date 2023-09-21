@@ -86,6 +86,24 @@ impl DalFs {
             });
         Box::new(iter)
     }
+
+    fn remove_inode(&mut self, parent: u64, name: &OsStr) -> Result<(), i32> {
+        let ino_opt = self.inodes.child(parent, &name).map(|inode| inode.attr.ino);
+        let path_ref = self.inodes[parent].path.join(&name);
+        let path = path_ref.to_str().unwrap();
+        match self.op.delete(path) {
+            Ok(_) => {
+                ino_opt.map(|ino| {
+                    self.inodes.remove(ino);
+                });
+                Ok(())
+            },
+            Err(err) => {
+                println!("Remove inode failed: {}", err);
+                Err(EIO)
+            }
+        }
+    }
 }
 
 impl Filesystem for DalFs {
@@ -429,23 +447,58 @@ impl Filesystem for DalFs {
         reply.ok();
     }
 
+    fn rename(&mut self, _req: &Request, parent: u64, name: &OsStr, newparent: u64, newname: &OsStr, reply: ReplyEmpty) {
+        println!("rename(p={}, name={:?}, newp={}, newname={:?})", parent, name, newparent, newname);
+        let old_path_ref = self.inodes[parent].path.join(&name);
+        let old_path = old_path_ref.to_str().unwrap();
+        match self.op.reader(old_path) {
+            Ok(mut reader) => {
+                let path_ref = self.inodes[newparent].path.join(&newname);
+                let path = path_ref.to_str().unwrap();
+                match self.op.writer(path) {
+                    Ok(mut writer) => {
+                        while let Some(d) = reader.next() {
+                            match d {
+                                Ok(data) => writer.write(data),
+                                Err(_) => break,
+                            };
+                        };
+                        writer.close();
+                    },
+                    Err(_) => return reply.error(ENOENT),
+                };
+            },
+            Err(_) => return reply.error(ENOENT),
+        };
+        // Update the node
+        match self.op.delete(old_path) {
+            Ok(_) => {
+                match self.remove_inode(parent, name) {
+                    Ok(_) => {
+                        // Mark unvisited
+                        let mut inodes = &mut self.inodes;
+                        let mut dir_inode = inodes.get_mut(parent).expect("inode missing for dir just listed");
+                        dir_inode.visited = false;
+
+                        reply.ok()
+                    },
+                    Err(_) => reply.error(EIO)
+                }
+            },
+            Err(_) => {
+                reply.error(EIO)
+            },
+        }
+    }
+
     fn unlink(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
         println!("unlink(parent={}, name={:?})", parent, name);
 
-        let ino_opt = self.inodes.child(parent, &name).map(|inode| inode.attr.ino);
-        let path_ref = self.inodes[parent].path.join(&name);
-        let path = path_ref.to_str().unwrap();
-        match self.op.delete(path) {
+        match self.remove_inode(parent, name) {
             Ok(_) => {
-                ino_opt.map(|ino| {
-                    self.inodes.remove(ino);
-                });
                 reply.ok()
             },
-            Err(err) => {
-                println!("Delete failed: {}", err);
-                reply.error(EIO);
-            }
+            Err(_) => reply.error(EIO)
         }
     }
 }
