@@ -223,7 +223,8 @@ impl Filesystem for DalFs {
         let dir_visited = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
         if dir_visited {
             let cached_dir = self.cache_readdir(ino);
-            if offset as usize > cached_dir.enumerate().count() {
+            let count = cached_dir.enumerate().count() + 2;
+            if offset as usize > count {
                 reply.ok();
                 return;
             }
@@ -234,21 +235,20 @@ impl Filesystem for DalFs {
             _ => self.inodes.parent(ino).expect("inode has no parent").attr.ino,
         };
 
-        reply.add(ino, 0, FileType::Directory, ".");
-        reply.add(parent_ino, 1, FileType::Directory, "..");
+        if offset < 2 {
+            match offset {
+                0 => {
+                    reply.add(ino, 0, FileType::Directory, ".");
+                    reply.add(parent_ino, 1, FileType::Directory, "..");
+                },
+                1 => {
+                    reply.add(parent_ino, 1, FileType::Directory, "..");
+                },
+                _ => {},
+            }
+        }
 
         match dir_visited {
-            // read directory from cache
-            true =>  {
-                for (i, next) in self.cache_readdir(ino).enumerate().skip(offset as usize) {
-                    match next {
-                        Ok((filename, attr)) => {
-                            reply.add(attr.ino, i as i64 + offset + 2, attr.kind, &filename);
-                        }
-                        Err(err) => { return reply.error(err); }
-                    }
-                }
-            },
             // read directory from OpenDAL and save to cache
             false => {
                 let ref parent_path = self.inodes[ino].path.clone();
@@ -263,8 +263,7 @@ impl Filesystem for DalFs {
                             let metadata = self.op.stat(entry.path()).unwrap();
                             let child_path = parent_path.join(entry.name());
                             let inode = self.inodes.insert_metadata(&child_path, &metadata);
-                            reply.add(inode.attr.ino, index as i64 + offset + 2, inode.attr.kind, entry.name());
-        
+
                             match metadata.mode() {
                                 EntryMode::FILE => {
                                     println!("Handling file");
@@ -282,8 +281,20 @@ impl Filesystem for DalFs {
                         },
                     };
                 }
-            }
+            },
+            // already read directory into cache
+            true => {},
         };
+
+        // Read from cache for visited and non-visited to keep the order
+        for (i, next) in self.cache_readdir(ino).enumerate().skip(offset as usize) {
+            match next {
+                Ok((filename, attr)) => {
+                    reply.add(attr.ino, i as i64 + offset + 2, attr.kind, &filename);
+                }
+                Err(err) => { return reply.error(err); }
+            }
+        }
 
         // Mark this node visited
         let mut inodes = &mut self.inodes;
