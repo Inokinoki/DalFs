@@ -2,6 +2,8 @@
 name = "dalfs"
 version = "0.0.1"
 edition = "2021"
+description = "A Userspace filesystem based on OpenDAL"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
