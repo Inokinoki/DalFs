@@ -25,7 +25,7 @@ pub fn get_operator_from_env(scheme: &str) -> Result<Operator> {
 pub fn get_operator_with_config(scheme: &str, map: HashMap<String, String>) -> Result<Operator> {
     match scheme {
         "azblob" => Operator::via_map(Scheme::Azblob, map),
-        "azdfs" => Operator::via_map(Scheme::Azdfs, map),
+        "azdls" => Operator::via_map(Scheme::Azdls, map),
         // "cacache" => Operator::via_map(Scheme::Cacache, map),
         "cos" => Operator::via_map(Scheme::Cos, map),
         "dashmap" => Operator::via_map(Scheme::Dashmap, map),

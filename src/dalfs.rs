@@ -257,28 +257,21 @@ impl Filesystem for DalFs {
                     Ok(entries)  => entries,
                     Err(e) => return reply.error(EACCES),
                 };
-                for (index, result) in entries.into_iter().enumerate().skip(offset as usize) {
-                    match result {
-                        Ok(entry) => {
-                            let metadata = self.op.stat(entry.path()).unwrap();
-                            let child_path = parent_path.join(entry.name());
-                            let inode = self.inodes.insert_metadata(&child_path, &metadata);
+                for (index, entry) in entries.into_iter().enumerate().skip(offset as usize) {
+                    let metadata = self.op.stat(entry.path()).unwrap();
+                    let child_path = parent_path.join(entry.name());
+                    let inode = self.inodes.insert_metadata(&child_path, &metadata);
 
-                            match metadata.mode() {
-                                EntryMode::FILE => {
-                                    println!("Handling file");
-                                    // reply.add(inode, i + offset + 2, FileType::RegularFile, child_path);
-                                }
-                                EntryMode::DIR => {
-                                    println!("Handling dir {} {}", entry.path(), entry.name());
-                                    // reply.add(inode, i + offset + 2, FileType::Directory, child_path);
-                                }
-                                EntryMode::Unknown => continue,
-                            };
-                        },
-                        Err(..) => {
-                            return reply.error(ENOENT);
-                        },
+                    match metadata.mode() {
+                        EntryMode::FILE => {
+                            println!("Handling file");
+                            // reply.add(inode, i + offset + 2, FileType::RegularFile, child_path);
+                        }
+                        EntryMode::DIR => {
+                            println!("Handling dir {} {}", entry.path(), entry.name());
+                            // reply.add(inode, i + offset + 2, FileType::Directory, child_path);
+                        }
+                        EntryMode::Unknown => continue,
                     };
                 }
             },
