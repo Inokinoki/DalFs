@@ -187,7 +187,8 @@ impl Filesystem for DalFs {
                             }
                         }
                     },
-                    Err(_) => {
+                    Err(err) => {
+                        log::warn!("Reading failed due to {:?}", err);
                         reply.error(ENOENT);
                     },
                 };
@@ -256,7 +257,10 @@ impl Filesystem for DalFs {
 
                 let entries = match self.op.list(parent_path.to_str().unwrap()) {
                     Ok(entries)  => entries,
-                    Err(_) => return reply.error(EACCES),
+                    Err(error) => {
+                        log::warn!("readdir failed due to {:?}", error);
+                        return reply.error(EACCES);
+                    },
                 };
                 for (_, entry) in entries.into_iter().enumerate().skip(offset as usize) {
                     let metadata = self.op.stat(entry.path()).unwrap();
@@ -319,7 +323,10 @@ impl Filesystem for DalFs {
         let path_str = path.to_str().unwrap();
         match self.op.write(path_str, vec!()) {
             Ok(_) => reply.entry(&TTL, &attr, 0),
-            Err(_) => reply.error(ENOENT),
+            Err(err) => {
+                log::warn!("Creating node failed due to {:?}", err);
+                reply.error(ENOENT);
+            },
         };
     }
 
@@ -370,8 +377,8 @@ impl Filesystem for DalFs {
                     // We assume to have reading perm with writing perm
                     let original_data = match self.op.read(inode.path.to_str().unwrap()) {
                         Ok(d) => d, // TODO: Do not copy all data
-                        Err(_) => {
-                            log::debug!("Reading failed");
+                        Err(err) => {
+                            log::warn!("Reading failed due to {:?}", err);
                             reply.error(ENOENT);
                             return;
                         },
@@ -381,8 +388,8 @@ impl Filesystem for DalFs {
 
                     let mut writer = match self.op.writer(inode.path.to_str().unwrap()) {
                         Ok(writer) => writer,
-                        Err(_) => {
-                            log::debug!("Writing failed");
+                        Err(err) => {
+                            log::warn!("Writing failed due to {:?}", err);
                             reply.error(ENOENT);
                             return;
                         },
@@ -395,8 +402,8 @@ impl Filesystem for DalFs {
                             reply.written(data.len() as u32);
                             data.len() as u64
                         },
-                        Err(_) => {
-                            log::debug!("Writing failed");
+                        Err(err) => {
+                            log::warn!("Writing failed due to {:?}", err);
                             reply.error(ENOENT);
                             0
                         },
@@ -421,8 +428,8 @@ impl Filesystem for DalFs {
                             reply.written(data.len() as u32);
                             data.len() as u64
                         },
-                        Err(_) => {
-                            log::debug!("Writing failed");
+                        Err(err) => {
+                            log::warn!("Writing failed due to {:?}", err);
                             reply.error(ENOENT);
                             0
                         },
@@ -465,15 +472,24 @@ impl Filesystem for DalFs {
                         while let Some(d) = reader.next() {
                             let _ = match d {
                                 Ok(data) => writer.write(data),
-                                Err(_) => break,
+                                Err(err) => {
+                                    log::warn!("Renaming failed due to {:?}", err);
+                                    break
+                                },
                             };
                         };
                         let _ = writer.close();
                     },
-                    Err(_) => return reply.error(ENOENT),
+                    Err(err) => {
+                        log::warn!("Renaming failed due to {:?}", err);
+                        return reply.error(ENOENT);
+                    },
                 };
             },
-            Err(_) => return reply.error(ENOENT),
+            Err(err) => {
+                log::warn!("Renaming failed due to {:?}", err);
+                return reply.error(ENOENT);
+            },
         };
         // Update the node
         match self.op.delete(old_path) {
@@ -487,10 +503,14 @@ impl Filesystem for DalFs {
 
                         reply.ok()
                     },
-                    Err(_) => reply.error(EIO)
+                    Err(err) => {
+                        log::warn!("Renaming failed due to {:?}", err);
+                        reply.error(EIO);
+                    }
                 }
             },
-            Err(_) => {
+            Err(err) => {
+                log::warn!("Renaming failed due to {:?}", err);
                 reply.error(EIO)
             },
         }
@@ -503,7 +523,10 @@ impl Filesystem for DalFs {
             Ok(_) => {
                 reply.ok()
             },
-            Err(_) => reply.error(EIO)
+            Err(err) => {
+                log::warn!("Removing failed due to {:?}", err);
+                reply.error(EIO);
+            }
         }
     }
 }
