@@ -6,13 +6,14 @@ This project largely refers to [netfuse](https://github.com/anowell/netfuse) pro
 
 Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://github.com/apache/incubator-opendal), thus supports the following backend as data sources (some of them will be supported after upgrading OpenDAL):
 
+- Atomicserver
 - Azblob
-- Azdfs
-- ~~Cacache~~
+- Azdls
+- Cacache
 - Cos
 - Dashmap
-- ~~Etcd~~
-- ~~Foundationdb~~
+- Etcd
+- Foundationdb
 - Fs
 - Ftp
 - Gcs
@@ -21,18 +22,18 @@ Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://gi
 - Http
 - Ipfs
 - Ipmfs
-- ~~Memcached~~
+- Memcached
 - Memory
-- ~~MiniMoka~~
+- MiniMoka
 - Moka
 - Obs
 - Onedrive
 - Gdrive
-- ~~Dropbox~~
+- Dropbox
 - Oss
-- ~~Persy~~
+- Persy
 - Redis
-- ~~Postgresql~~
+- Postgresql
 - Rocksdb
 - S3
 - Sftp
@@ -42,8 +43,8 @@ Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://gi
 - Wasabi
 - Webdav
 - Webhdfs
-- ~~Redb~~
-- ~~Tikv~~
+- Redb
+- Tikv
 
 The functionnality is very limited right now, because I just use several hours to come up with the idea and implement it.
 
