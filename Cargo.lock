@@ -269,6 +269,7 @@ dependencies = [
  "fuse",
  "futures",
  "libc",
+ "log 0.4.20",
  "opendal",
  "sequence_trie",
  "time 0.1.45",

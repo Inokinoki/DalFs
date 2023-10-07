@@ -5,6 +5,8 @@ use opendal::Scheme;
 use std::collections::HashMap;
 use std::env;
 
+use log;
+
 #[feature(str_split_remainder)]
 pub fn get_operator_from_env(scheme: &str) -> Result<Operator> {
     let mut map = HashMap::new();
@@ -12,12 +14,12 @@ pub fn get_operator_from_env(scheme: &str) -> Result<Operator> {
     let mut args = env::args_os();
     args.next(); args.next(); args.next();  // Ignore the first three args
     for arg_os in args {
-        println!("Parsing arg: {:?}", arg_os);
+        log::debug!("Parsing arg: {:?}", arg_os);
         let arg = arg_os.to_str().unwrap();
         let mut split = arg.split('=');
         map.insert(split.next().unwrap().to_string(), split.next().unwrap_or(&"").to_string());
     }
-    println!("Parsed {:?}", map);
+    log::debug!("Parsed {:?}", map);
 
     get_operator_with_config(scheme, map)
 }

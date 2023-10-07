@@ -7,6 +7,8 @@ use opendal::Result;
 
 use std::env;
 
+use log;
+
 mod dalfs;
 mod inode;
 mod config;
@@ -15,7 +17,7 @@ fn main() -> Result<()> {
     let scheme_osstring = env::args_os().nth(2).expect("Need an OpenDAL scheme");
     let scheme = scheme_osstring.to_str().unwrap();
     let op = config::get_operator_from_env(&scheme)?.blocking();
-    println!("operator: {:?}", op);
+    log::debug!("operator: {:?}", op);
 
     let fs = dalfs::DalFs {
         op: op,

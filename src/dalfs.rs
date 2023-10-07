@@ -34,6 +34,8 @@ use std::time::{
 };
 use std::result::Result;
 
+use log;
+
 use crate::inode;
 
 const TTL: Timespec = Timespec { sec: 1, nsec: 0 };                     // 1 second
@@ -98,7 +100,7 @@ impl DalFs {
                 Ok(())
             },
             Err(err) => {
-                println!("Remove inode failed: {}", err);
+                log::debug!("Remove inode failed: {}", err);
                 Err(EIO)
             }
         }
@@ -108,7 +110,7 @@ impl DalFs {
 impl Filesystem for DalFs {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         let name_str = name.to_str().unwrap();
-        println!("lookup(parent={}, name=\"{}\")", parent, name_str);
+        log::debug!("lookup(parent={}, name=\"{}\")", parent, name_str);
 
         match self.inodes.child(parent, &name).cloned() {
             Some(child_inode) => reply.entry(&TTL, &child_inode.attr, 0),
@@ -121,7 +123,7 @@ impl Filesystem for DalFs {
                         reply.entry(&TTL, &inode.attr, 0)
                     }
                     Err(err) => {
-                        println!("{}", err);
+                        log::debug!("{}", err);
                         reply.error(ENOENT)
                     }
                 }
@@ -130,7 +132,7 @@ impl Filesystem for DalFs {
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
-        println!("getattr(ino={})", ino);
+        log::debug!("getattr(ino={})", ino);
         // TODO: Allow to read more attr
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
@@ -161,7 +163,7 @@ impl Filesystem for DalFs {
     }
 
     fn read(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
-        println!("read(ino={}, fh={}, offset={}, size={})", ino, _fh, offset, size);
+        log::debug!("read(ino={}, fh={}, offset={}, size={})", ino, _fh, offset, size);
 
         match self.inodes.get(ino) {
             Some(inode) => {
@@ -180,7 +182,7 @@ impl Filesystem for DalFs {
                                 reply.data(&buffer[(offset as usize)..]);
                             }
                             len => {
-                                println!("attempted read beyond buffer for ino {} len={} offset={} size={}", ino, len, offset, size);
+                                log::debug!("attempted read beyond buffer for ino {} len={} offset={} size={}", ino, len, offset, size);
                                 reply.error(ENOENT);
                             }
                         }
@@ -198,7 +200,7 @@ impl Filesystem for DalFs {
     }
 
     fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
-        println!("mkdir(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
+        log::debug!("mkdir(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
 
         let path_ref = self.inodes[parent].path.join(&name);
         let path = path_ref.to_str().unwrap();
@@ -210,14 +212,14 @@ impl Filesystem for DalFs {
                 reply.entry(&TTL, &attr, 0);
             },
             Err(err) => {
-                println!("mkdir error - {}", err);
+                log::debug!("mkdir error - {}", err);
                 reply.error(EACCES);
             },
         };
     }
 
     fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
-        println!("readdir(ino={}, fh={}, offset={})", ino, _fh, offset);
+        log::debug!("readdir(ino={}, fh={}, offset={})", ino, _fh, offset);
 
         let dir_visited = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
         if dir_visited {
@@ -263,11 +265,11 @@ impl Filesystem for DalFs {
 
                     match metadata.mode() {
                         EntryMode::FILE => {
-                            println!("Handling file");
+                            log::debug!("Handling file");
                             // reply.add(_inode, i + offset + 2, FileType::RegularFile, child_path);
                         }
                         EntryMode::DIR => {
-                            println!("Handling dir {} {}", entry.path(), entry.name());
+                            log::debug!("Handling dir {} {}", entry.path(), entry.name());
                             // reply.add(_inode, i + offset + 2, FileType::Directory, child_path);
                         }
                         EntryMode::Unknown => continue,
@@ -297,7 +299,7 @@ impl Filesystem for DalFs {
     }
 
     fn mknod(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, _rdev: u32, reply: ReplyEntry) {
-        println!("mknod(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
+        log::debug!("mknod(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
 
         // TODO: check if we have write access to this dir in OpenDAL
         let path = self.inodes[parent].path.join(&name);
@@ -322,7 +324,7 @@ impl Filesystem for DalFs {
     }
 
     fn open(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        println!("open(ino={}, flags=0x{:x})", ino, flags);
+        log::debug!("open(ino={}, flags=0x{:x})", ino, flags);
 
         match self.inodes.get(ino) {
             Some(_) => {
@@ -336,7 +338,7 @@ impl Filesystem for DalFs {
     fn setattr(&mut self, _req: &Request, ino: u64, _mode: Option<u32>, uid: Option<u32>, gid: Option<u32>,
         size: Option<u64>, _atime: Option<Timespec>, _mtime: Option<Timespec>, _fh: Option<u64>,
         _crtime: Option<Timespec>, _chgtime: Option<Timespec>, _bkuptime: Option<Timespec>, flags: Option<u32>, reply: ReplyAttr) {
-        println!("setattr(ino={}, mode={:?}, size={:?}, fh={:?}, flags={:?})", ino, _mode, size, _fh, flags);
+        log::debug!("setattr(ino={}, mode={:?}, size={:?}, fh={:?}, flags={:?})", ino, _mode, size, _fh, flags);
         match self.inodes.get_mut(ino) {
             Some(inode) => {
                 if let Some(new_size) = size {
@@ -357,7 +359,7 @@ impl Filesystem for DalFs {
 
     fn write(&mut self, _req: &Request, ino: u64, fh: u64, offset: i64, data: &[u8], flags: u32, reply: ReplyWrite) {
         // TODO: check if in read-only mode: reply EROFS
-        println!("write(ino={}, fh={}, offset={}, len={}, flags=0x{:x})", ino, fh, offset, data.len(), flags);
+        log::debug!("write(ino={}, fh={}, offset={}, len={}, flags=0x{:x})", ino, fh, offset, data.len(), flags);
 
         let is_replace = (offset == 0) && (self.inodes.get(ino).unwrap().attr.size < data.len() as u64);
 
@@ -369,7 +371,7 @@ impl Filesystem for DalFs {
                     let original_data = match self.op.read(inode.path.to_str().unwrap()) {
                         Ok(d) => d, // TODO: Do not copy all data
                         Err(_) => {
-                            println!("Reading failed");
+                            log::debug!("Reading failed");
                             reply.error(ENOENT);
                             return;
                         },
@@ -380,7 +382,7 @@ impl Filesystem for DalFs {
                     let mut writer = match self.op.writer(inode.path.to_str().unwrap()) {
                         Ok(writer) => writer,
                         Err(_) => {
-                            println!("Writing failed");
+                            log::debug!("Writing failed");
                             reply.error(ENOENT);
                             return;
                         },
@@ -394,7 +396,7 @@ impl Filesystem for DalFs {
                             data.len() as u64
                         },
                         Err(_) => {
-                            println!("Writing failed");
+                            log::debug!("Writing failed");
                             reply.error(ENOENT);
                             0
                         },
@@ -405,7 +407,7 @@ impl Filesystem for DalFs {
                     return;
                 },
                 None => {
-                    println!("reading failed");
+                    log::debug!("reading failed");
                     reply.error(ENOENT);
                     return;
                 },
@@ -420,14 +422,14 @@ impl Filesystem for DalFs {
                             data.len() as u64
                         },
                         Err(_) => {
-                            println!("Writing failed");
+                            log::debug!("Writing failed");
                             reply.error(ENOENT);
                             0
                         },
                     }
                 },
                 None => {
-                    println!("write failed to read file");
+                    log::debug!("write failed to read file");
                     reply.error(ENOENT);
                     return;
                 },
@@ -439,19 +441,19 @@ impl Filesystem for DalFs {
     }
 
     fn flush(&mut self, _req: &Request<'_>, ino: u64, fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
-        println!("flush(ino={}, fh={})", ino, fh);
+        log::debug!("flush(ino={}, fh={})", ino, fh);
         // TODO: find a way to flush reader and/or writer
         reply.error(ENOSYS);
     }
 
     fn release(&mut self, _req: &Request<'_>, ino: u64, fh: u64, flags: u32, _lock_owner: u64, flush: bool, reply: ReplyEmpty) {
-        println!("release(ino={}, fh={}, flags={}, flush={})", ino, fh, flags, flush);
+        log::debug!("release(ino={}, fh={}, flags={}, flush={})", ino, fh, flags, flush);
         // TODO: close writer and reader
         reply.ok();
     }
 
     fn rename(&mut self, _req: &Request, parent: u64, name: &OsStr, newparent: u64, newname: &OsStr, reply: ReplyEmpty) {
-        println!("rename(p={}, name={:?}, newp={}, newname={:?})", parent, name, newparent, newname);
+        log::debug!("rename(p={}, name={:?}, newp={}, newname={:?})", parent, name, newparent, newname);
         let old_path_ref = self.inodes[parent].path.join(&name);
         let old_path = old_path_ref.to_str().unwrap();
         match self.op.reader(old_path) {
@@ -495,7 +497,7 @@ impl Filesystem for DalFs {
     }
 
     fn unlink(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
-        println!("unlink(parent={}, name={:?})", parent, name);
+        log::debug!("unlink(parent={}, name={:?})", parent, name);
 
         match self.remove_inode(parent, name) {
             Ok(_) => {

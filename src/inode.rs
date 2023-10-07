@@ -88,7 +88,7 @@ impl InodeStore {
         });
 
 
-        println!("insert metadata: {} {}", ino, path.as_ref().display());
+        log::debug!("insert metadata: {} {}", ino, path.as_ref().display());
 
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
         let mut ts = Timespec {
@@ -190,7 +190,7 @@ impl InodeStore {
                 panic!("Corrupted inode store: reinserted conflicting ino {} (path={}, oldpath={})",
                         ino, path.display(), old_inode.path.display());
             } else {
-                println!("Updating ino {} at path {}", ino, path.display());
+                log::debug!("Updating ino {} at path {}", ino, path.display());
             }
 
         }
