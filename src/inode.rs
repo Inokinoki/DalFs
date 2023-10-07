@@ -196,7 +196,7 @@ impl InodeStore {
         }
 
         if !self.ino_trie.insert(&sequence, ino) {
-            let mut node = self.ino_trie.get_mut_node(&sequence)
+            let node = self.ino_trie.get_mut_node(&sequence)
                                 .expect(&format!("Corrupt inode store: couldn't insert or modify ino_trie at {:?}", &sequence));
             // TODO: figure out why this check triggers a false alarm panic on backspacing to dir and then tabbing
             // if node.value.is_some() {

@@ -11,7 +11,6 @@ use fuse::{
     ReplyEmpty,
     ReplyWrite,
     ReplyOpen,
-    ReplyCreate,
 };
 
 use opendal::EntryMode;
@@ -205,7 +204,7 @@ impl Filesystem for DalFs {
         let path = path_ref.to_str().unwrap();
         match self.op.create_dir(&(path.to_string() + "/")) {
             Ok(_) => {
-                let mut meta = Metadata::new(EntryMode::DIR);
+                let meta = Metadata::new(EntryMode::DIR);
                 let mut attr = self.inodes.insert_metadata(&path, &meta).attr;
                 attr.perm = _mode as u16;
                 reply.entry(&TTL, &attr, 0);
@@ -255,21 +254,21 @@ impl Filesystem for DalFs {
 
                 let entries = match self.op.list(parent_path.to_str().unwrap()) {
                     Ok(entries)  => entries,
-                    Err(e) => return reply.error(EACCES),
+                    Err(_) => return reply.error(EACCES),
                 };
-                for (index, entry) in entries.into_iter().enumerate().skip(offset as usize) {
+                for (_, entry) in entries.into_iter().enumerate().skip(offset as usize) {
                     let metadata = self.op.stat(entry.path()).unwrap();
                     let child_path = parent_path.join(entry.name());
-                    let inode = self.inodes.insert_metadata(&child_path, &metadata);
+                    let _inode = self.inodes.insert_metadata(&child_path, &metadata);
 
                     match metadata.mode() {
                         EntryMode::FILE => {
                             println!("Handling file");
-                            // reply.add(inode, i + offset + 2, FileType::RegularFile, child_path);
+                            // reply.add(_inode, i + offset + 2, FileType::RegularFile, child_path);
                         }
                         EntryMode::DIR => {
                             println!("Handling dir {} {}", entry.path(), entry.name());
-                            // reply.add(inode, i + offset + 2, FileType::Directory, child_path);
+                            // reply.add(_inode, i + offset + 2, FileType::Directory, child_path);
                         }
                         EntryMode::Unknown => continue,
                     };
@@ -290,8 +289,8 @@ impl Filesystem for DalFs {
         }
 
         // Mark this node visited
-        let mut inodes = &mut self.inodes;
-        let mut dir_inode = inodes.get_mut(ino).expect("inode missing for dir just listed");
+        let inodes = &mut self.inodes;
+        let dir_inode = inodes.get_mut(ino).expect("inode missing for dir just listed");
         dir_inode.visited = true;
 
         reply.ok();
@@ -315,8 +314,8 @@ impl Filesystem for DalFs {
         // FIXME: cloning because it's quick-and-dirty
         let attr = self.inodes.insert_metadata(&Path::new(&path), &meta).attr.clone();
 
-        let pathStr = path.to_str().unwrap();
-        match self.op.write(pathStr, vec!()) {
+        let path_str = path.to_str().unwrap();
+        match self.op.write(path_str, vec!()) {
             Ok(_) => reply.entry(&TTL, &attr, 0),
             Err(_) => reply.error(ENOENT),
         };
@@ -326,7 +325,7 @@ impl Filesystem for DalFs {
         println!("open(ino={}, flags=0x{:x})", ino, flags);
 
         match self.inodes.get(ino) {
-            Some(inode) => {
+            Some(_) => {
                 // TODO: Create reader and/or writer
                 reply.opened(0, flags);
             },
@@ -339,7 +338,7 @@ impl Filesystem for DalFs {
         _crtime: Option<Timespec>, _chgtime: Option<Timespec>, _bkuptime: Option<Timespec>, flags: Option<u32>, reply: ReplyAttr) {
         println!("setattr(ino={}, mode={:?}, size={:?}, fh={:?}, flags={:?})", ino, _mode, size, _fh, flags);
         match self.inodes.get_mut(ino) {
-            Some(mut inode) => {
+            Some(inode) => {
                 if let Some(new_size) = size {
                     inode.attr.size = new_size;
                 }
@@ -365,7 +364,7 @@ impl Filesystem for DalFs {
         // Open a reader and flush all data to writer if not replace
         if !is_replace {
             match self.inodes.get_mut(ino) {
-                Some(mut inode) => {
+                Some(inode) => {
                     // We assume to have reading perm with writing perm
                     let original_data = match self.op.read(inode.path.to_str().unwrap()) {
                         Ok(d) => d, // TODO: Do not copy all data
@@ -414,7 +413,7 @@ impl Filesystem for DalFs {
         } else {
             // Replace the file
             let new_size = match self.inodes.get_mut(ino) {
-                Some(mut inode) => {
+                Some(inode) => {
                     match self.op.write(inode.path.to_str().unwrap(), data.to_vec()) {
                         Ok(_) => {
                             reply.written(data.len() as u32);
@@ -462,12 +461,12 @@ impl Filesystem for DalFs {
                 match self.op.writer(path) {
                     Ok(mut writer) => {
                         while let Some(d) = reader.next() {
-                            match d {
+                            let _ = match d {
                                 Ok(data) => writer.write(data),
                                 Err(_) => break,
                             };
                         };
-                        writer.close();
+                        let _ = writer.close();
                     },
                     Err(_) => return reply.error(ENOENT),
                 };
@@ -480,8 +479,8 @@ impl Filesystem for DalFs {
                 match self.remove_inode(parent, name) {
                     Ok(_) => {
                         // Mark unvisited
-                        let mut inodes = &mut self.inodes;
-                        let mut dir_inode = inodes.get_mut(parent).expect("inode missing for dir just listed");
+                        let inodes = &mut self.inodes;
+                        let dir_inode = inodes.get_mut(parent).expect("inode missing for dir just listed");
                         dir_inode.visited = false;
 
                         reply.ok()
