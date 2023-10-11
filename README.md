@@ -2,9 +2,7 @@
 
 **Still a WIP!!! Could be buggy and risky, please use a VM to test.** Take your own risk.
 
-This project largely refers to [netfuse](https://github.com/anowell/netfuse) project, but will be refactored soon.
-
-Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://github.com/apache/incubator-opendal), thus supports the following backend as data sources (some of them will be supported after upgrading OpenDAL):
+Currently, it can provide a Userspace filesystem backing by [OpenDAL](https://github.com/apache/incubator-opendal), thus supports the following backend as data sources:
 
 - Atomicserver
 - Azblob
@@ -64,7 +62,7 @@ or not yet implemented:
 
 ## Build
 
-You might need to install `libfuse-dev` in order to use Rust `fuse` crate.
+You might need to install `libfuse-dev` in order to use Rust `fuser` crate.
 
 Just run the following command to build it:
 
@@ -84,7 +82,7 @@ where the `mount-point` is a path to mount the filesystem; `scheme` is an OpenDA
 
 The remaining parameters are `<key>=<value>` pairs needed by OpenDAL schemes.
 
-Currently only `fs` backend is tested. For example, the following command will mount a filesystem using the data in your `/tmp` directory to the mount-point.
+Currently `fs` and `s3` backends are tested. For example, the following command will mount a filesystem using the data in your `/tmp` directory to the mount-point.
 
 ```bash
 cargo run <mount-point> fs root=/tmp
@@ -92,8 +90,13 @@ cargo run <mount-point> fs root=/tmp
 
 <img width="1185" alt="image" src="https://github.com/Inokinoki/DalFs/assets/8311300/c591ffe1-be35-4c79-8ffa-368c66872b9f">
 
+And the following mount a filesystem backed by s3:
 
-For more details, please check [OpenDAL scheme doc](https://opendal.apache.org/docs/rust/opendal/enum.Scheme.html).
+```bash
+cargo run <mount-point> s3 root=/tmp endpoint=<end-point-url> bucket=<bucket> access_key_id=<access-key-id> secret_access_key=<secret-access-key> region=auto
+```
+
+For more details and more backends, please check [OpenDAL scheme doc](https://opendal.apache.org/docs/rust/opendal/enum.Scheme.html).
 
 ## Contribution
 
