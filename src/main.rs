@@ -1,5 +1,5 @@
 extern crate env_logger;
-extern crate fuse;
+extern crate fuser;
 extern crate libc;
 extern crate time;
 
@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
 
     env_logger::init();
     let mountpoint = env::args_os().nth(1).unwrap();
-    fuse::mount(fs, &mountpoint, &[]).unwrap();
+    fuser::mount(fs, &mountpoint, &[]).unwrap();
 
     Ok(())
 }

@@ -1,14 +1,12 @@
 /* Original file: https://github.com/anowell/netfuse/blob/master/src/inode.rs */
-use fuse::{FileType, FileAttr};
+use fuser::{FileType, FileAttr};
 use sequence_trie::SequenceTrie;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
-use time;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use opendal::Metadata;
 use opendal::EntryMode;
-use time::Timespec;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -47,7 +45,7 @@ impl InodeStore {
             last_ino: 1, // 1 is reserved for root
         };
 
-        let now = time::now_utc().to_timespec();
+        let now = SystemTime::now();
         let fs_root = FileAttr {
             ino: 1,
             size: 0,
@@ -63,6 +61,8 @@ impl InodeStore {
             gid: gid,
             rdev: 0,
             flags: 0,
+            blksize: 4096,
+            padding: 0,
         };
 
         store.insert(Inode::new("/", fs_root));
@@ -90,16 +90,10 @@ impl InodeStore {
 
         log::debug!("insert metadata: {} {}", ino, path.as_ref().display());
 
-        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
-        let mut ts = Timespec {
-            sec: now.as_secs() as i64,
-            nsec: now.subsec_nanos() as i32,
-        };
+        let now = SystemTime::now();
+        let mut ts = now;
         if let Some(last_modified_datetime) = metadata.last_modified() {
-            ts = Timespec {
-                sec: last_modified_datetime.timestamp(),
-                nsec: last_modified_datetime.timestamp_subsec_nanos() as i32,
-            };
+            ts = last_modified_datetime.into();
         }
         let attr = FileAttr {
             ino: ino,
@@ -121,6 +115,8 @@ impl InodeStore {
             gid: self.gid,
             rdev: 0,
             flags: 0,
+            blksize: 4096,
+            padding: 0,
         };
 
         self.insert(Inode::new(path, attr));
