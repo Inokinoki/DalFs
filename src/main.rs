@@ -18,6 +18,7 @@ async fn main() -> ExitCode {
 
     if let Err(e) = run(config) {
         log::error!("{}", e);
+        return ExitCode::FAILURE;
     }
 
     ExitCode::SUCCESS
