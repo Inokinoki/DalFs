@@ -19,3 +19,5 @@ time = "0.1"
 sequence_trie = "0.0.13"
 chrono = "0.4.30"
 log = "0.4.20"
+clap = { version = "4.4.6", features = ["derive"] }
+tap = "1.0.1"
