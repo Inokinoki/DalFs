@@ -1,12 +1,12 @@
 /* Original file: https://github.com/anowell/netfuse/blob/master/src/inode.rs */
-use fuser::{FileType, FileAttr};
+use fuser::{FileAttr, FileType};
+use opendal::EntryMode;
+use opendal::Metadata;
 use sequence_trie::SequenceTrie;
 use std::collections::HashMap;
-use std::ops::{Index, IndexMut};
 use std::ffi::{OsStr, OsString};
+use std::ops::{Index, IndexMut};
 use std::path::{Path, PathBuf};
-use opendal::Metadata;
-use opendal::EntryMode;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -80,13 +80,11 @@ impl InodeStore {
 
     pub fn insert_metadata<P: AsRef<Path>>(&mut self, path: P, metadata: &Metadata) -> &Inode {
         // Non-lexical borrows can't come soon enough
-        let ino_opt = self.get_by_path(path.as_ref())
-            .map(|inode| inode.attr.ino );
+        let ino_opt = self.get_by_path(path.as_ref()).map(|inode| inode.attr.ino);
         let ino = ino_opt.unwrap_or_else(|| {
             self.last_ino += 1;
             self.last_ino
         });
-
 
         log::debug!("insert metadata: {} {}", ino, path.as_ref().display());
 
@@ -124,24 +122,28 @@ impl InodeStore {
     }
 
     pub fn child<S: AsRef<OsStr>>(&self, ino: u64, name: S) -> Option<&Inode> {
-        self.get(ino)
-            .and_then(|inode| {
-                let mut sequence = path_to_sequence(&inode.path);
-                sequence.push(name.as_ref().to_owned());
-                self.ino_trie.get(&sequence).and_then(|ino| self.get(*ino) )
-            })
+        self.get(ino).and_then(|inode| {
+            let mut sequence = path_to_sequence(&inode.path);
+            sequence.push(name.as_ref().to_owned());
+            self.ino_trie.get(&sequence).and_then(|ino| self.get(*ino))
+        })
     }
 
     pub fn children(&self, ino: u64) -> Vec<&Inode> {
         match self.get(ino) {
             Some(inode) => {
                 let sequence = path_to_sequence(&inode.path);
-                let node = self.ino_trie.get_node(&sequence)
+                let node = self
+                    .ino_trie
+                    .get_node(&sequence)
                     .expect("inconsistent fs - failed to lookup by path after lookup by ino");
                 node.children
                     .values()
-                    .filter_map(|ref c| c.value.as_ref() )
-                    .map(|ino| self.get(*ino).expect("inconsistent fs - found child without inode") )
+                    .filter_map(|ref c| c.value.as_ref())
+                    .map(|ino| {
+                        self.get(*ino)
+                            .expect("inconsistent fs - found child without inode")
+                    })
                     .collect()
             }
             None => vec![],
@@ -156,14 +158,16 @@ impl InodeStore {
             return self.get(1);
         }
 
-        self.get(ino)
-            .and_then(|inode| {
-                let sequence = path_to_sequence(&inode.path);
-                match sequence.len() {
-                    1 => self.get(1),
-                    len => self.ino_trie.get(&sequence[0..(len-1)]).and_then(|p_ino| self.get(*p_ino) )
-                }
-            })
+        self.get(ino).and_then(|inode| {
+            let sequence = path_to_sequence(&inode.path);
+            match sequence.len() {
+                1 => self.get(1),
+                len => self
+                    .ino_trie
+                    .get(&sequence[0..(len - 1)])
+                    .and_then(|p_ino| self.get(*p_ino)),
+            }
+        })
     }
 
     pub fn get_mut(&mut self, ino: u64) -> Option<&mut Inode> {
@@ -183,17 +187,22 @@ impl InodeStore {
 
         if let Some(old_inode) = self.inode_map.insert(ino, inode) {
             if old_inode.path != path {
-                panic!("Corrupted inode store: reinserted conflicting ino {} (path={}, oldpath={})",
-                        ino, path.display(), old_inode.path.display());
+                panic!(
+                    "Corrupted inode store: reinserted conflicting ino {} (path={}, oldpath={})",
+                    ino,
+                    path.display(),
+                    old_inode.path.display()
+                );
             } else {
                 log::debug!("Updating ino {} at path {}", ino, path.display());
             }
-
         }
 
         if !self.ino_trie.insert(&sequence, ino) {
-            let node = self.ino_trie.get_mut_node(&sequence)
-                                .expect(&format!("Corrupt inode store: couldn't insert or modify ino_trie at {:?}", &sequence));
+            let node = self.ino_trie.get_mut_node(&sequence).expect(&format!(
+                "Corrupt inode store: couldn't insert or modify ino_trie at {:?}",
+                &sequence
+            ));
             // TODO: figure out why this check triggers a false alarm panic on backspacing to dir and then tabbing
             // if node.value.is_some() {
             //     panic!("Corrupt inode store: reinserted ino {} into ino_trie, prev value: {}", ino, node.value.unwrap());
@@ -231,5 +240,5 @@ impl IndexMut<u64> for InodeStore {
 }
 
 fn path_to_sequence(path: &Path) -> Vec<OsString> {
-    path.iter().map(|s| s.to_owned() ).collect()
+    path.iter().map(|s| s.to_owned()).collect()
 }

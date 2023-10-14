@@ -1,16 +1,6 @@
 use fuser::{
-    FileType,
-    FileAttr,
-    Filesystem,
-    Request,
-    ReplyData,
-    ReplyEntry,
-    ReplyAttr,
-    ReplyDirectory,
-    ReplyEmpty,
-    ReplyWrite,
-    ReplyOpen,
-    TimeOrNow,
+    FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
+    ReplyOpen, ReplyWrite, Request, TimeOrNow,
 };
 
 use opendal::EntryMode;
@@ -19,28 +9,24 @@ use opendal::Operator;
 
 use futures::executor::block_on;
 
-use libc::ENOENT;
 use libc::EACCES;
-use libc::ENOSYS;
 use libc::EIO;
+use libc::ENOENT;
+use libc::ENOSYS;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
-use std::time::{
-    SystemTime,
-    Duration,
-    UNIX_EPOCH,
-};
 use std::result::Result;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use log;
 
 use crate::inode;
 
-const TTL: Duration = Duration::from_secs(1);   // 1 second
+const TTL: Duration = Duration::from_secs(1); // 1 second
 
 pub struct DalFs {
     pub op: Operator,
@@ -54,20 +40,23 @@ fn get_basename(path: &Path) -> &OsStr {
 // Derivated from OpenDAL util
 pub fn parse_datetime_from_from_timestamp_millis(s: i64) -> DateTime<Utc> {
     let st = UNIX_EPOCH
-        .checked_add(Duration::from_millis(s as u64)).unwrap();
+        .checked_add(Duration::from_millis(s as u64))
+        .unwrap();
     st.into()
 }
 
 pub type LibcError = libc::c_int;
 
 impl DalFs {
-    fn cache_readdir<'a>(&'a mut self, ino: u64) -> Box<dyn Iterator<Item=Result<(OsString, FileAttr), LibcError>> + 'a> {
-        let iter = self.inodes
+    fn cache_readdir<'a>(
+        &'a mut self,
+        ino: u64,
+    ) -> Box<dyn Iterator<Item = Result<(OsString, FileAttr), LibcError>> + 'a> {
+        let iter = self
+            .inodes
             .children(ino)
             .into_iter()
-            .map( move |child| {
-                Ok((get_basename(&child.path).into(), child.attr.clone()))
-            });
+            .map(move |child| Ok((get_basename(&child.path).into(), child.attr.clone())));
         Box::new(iter)
     }
 
@@ -81,7 +70,7 @@ impl DalFs {
                     self.inodes.remove(ino);
                 });
                 Ok(())
-            },
+            }
             Err(err) => {
                 log::debug!("Remove inode failed: {}", err);
                 Err(EIO)
@@ -99,7 +88,12 @@ impl Filesystem for DalFs {
             Some(child_inode) => reply.entry(&TTL, &child_inode.attr, 0),
             None => {
                 let parent_inode = self.inodes[parent].clone();
-                let child_path = parent_inode.path.join(&name).as_path().display().to_string();
+                let child_path = parent_inode
+                    .path
+                    .join(&name)
+                    .as_path()
+                    .display()
+                    .to_string();
                 match block_on(self.op.stat(&child_path)) {
                     Ok(child_metadata) => {
                         let inode = self.inodes.insert_metadata(&child_path, &child_metadata);
@@ -123,34 +117,52 @@ impl Filesystem for DalFs {
             _ => {
                 match self.inodes.get(ino) {
                     Some(inode) => {
-                        
-                        reply.attr(&TTL,  &FileAttr {
-                            ino: ino,
-                            size: 0,
-                            blocks: 0,
-                            atime: create_time,
-                            mtime: create_time,
-                            ctime: create_time,
-                            crtime: create_time,
-                            kind: inode.attr.kind,
-                            perm: 0o755,
-                            nlink: 2,
-                            uid: 1000,
-                            gid: 1000,
-                            rdev: 0,
-                            flags: 0,
-                            blksize: 4096,
-                            padding: 0,
-                        });
-                    },
+                        reply.attr(
+                            &TTL,
+                            &FileAttr {
+                                ino: ino,
+                                size: 0,
+                                blocks: 0,
+                                atime: create_time,
+                                mtime: create_time,
+                                ctime: create_time,
+                                crtime: create_time,
+                                kind: inode.attr.kind,
+                                perm: 0o755,
+                                nlink: 2,
+                                uid: 1000,
+                                gid: 1000,
+                                rdev: 0,
+                                flags: 0,
+                                blksize: 4096,
+                                padding: 0,
+                            },
+                        );
+                    }
                     None => reply.error(ENOENT),
                 };
-            },
+            }
         }
     }
 
-    fn read(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, size: u32, _flags: i32, _lock_owner: Option<u64>, reply: ReplyData) {
-        log::debug!("read(ino={}, fh={}, offset={}, size={})", ino, _fh, offset, size);
+    fn read(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyData,
+    ) {
+        log::debug!(
+            "read(ino={}, fh={}, offset={}, size={})",
+            ino,
+            _fh,
+            offset,
+            size
+        );
 
         match self.inodes.get(ino) {
             Some(inode) => {
@@ -173,22 +185,35 @@ impl Filesystem for DalFs {
                                 reply.error(ENOENT);
                             }
                         }
-                    },
+                    }
                     Err(err) => {
                         log::warn!("Reading failed due to {:?}", err);
                         reply.error(ENOENT);
-                    },
+                    }
                 };
-            },
+            }
             None => {
                 // FS will firstly lookup and then read inode, so inode should be there
                 reply.error(ENOENT);
-            },
+            }
         };
     }
 
-    fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, _umask: u32, reply: ReplyEntry) {
-        log::debug!("mkdir(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
+    fn mkdir(
+        &mut self,
+        _req: &Request,
+        parent: u64,
+        name: &OsStr,
+        _mode: u32,
+        _umask: u32,
+        reply: ReplyEntry,
+    ) {
+        log::debug!(
+            "mkdir(parent={}, name={:?}, mode=0o{:o})",
+            parent,
+            name,
+            _mode
+        );
 
         let path_ref = self.inodes[parent].path.join(&name);
         let path = path_ref.to_str().unwrap();
@@ -198,15 +223,22 @@ impl Filesystem for DalFs {
                 let mut attr = self.inodes.insert_metadata(&path, &meta).attr;
                 attr.perm = _mode as u16;
                 reply.entry(&TTL, &attr, 0);
-            },
+            }
             Err(err) => {
                 log::debug!("mkdir error - {}", err);
                 reply.error(EACCES);
-            },
+            }
         };
     }
 
-    fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
+    fn readdir(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        _fh: u64,
+        offset: i64,
+        mut reply: ReplyDirectory,
+    ) {
         log::debug!("readdir(ino={}, fh={}, offset={})", ino, _fh, offset);
 
         let dir_visited = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
@@ -221,7 +253,13 @@ impl Filesystem for DalFs {
 
         let parent_ino = match ino {
             1 => 1,
-            _ => self.inodes.parent(ino).expect("inode has no parent").attr.ino,
+            _ => {
+                self.inodes
+                    .parent(ino)
+                    .expect("inode has no parent")
+                    .attr
+                    .ino
+            }
         };
 
         if offset < 2 {
@@ -229,11 +267,11 @@ impl Filesystem for DalFs {
                 0 => {
                     let _ = reply.add(ino, 0, FileType::Directory, ".");
                     let _ = reply.add(parent_ino, 1, FileType::Directory, "..");
-                },
+                }
                 1 => {
                     let _ = reply.add(parent_ino, 1, FileType::Directory, "..");
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -243,11 +281,11 @@ impl Filesystem for DalFs {
                 let ref parent_path = self.inodes[ino].path.clone();
 
                 let entries = match block_on(self.op.list(parent_path.to_str().unwrap())) {
-                    Ok(entries)  => entries,
+                    Ok(entries) => entries,
                     Err(error) => {
                         log::warn!("readdir failed due to {:?}", error);
                         return reply.error(EACCES);
-                    },
+                    }
                 };
                 for (_, entry) in entries.into_iter().enumerate().skip(offset as usize) {
                     let metadata = block_on(self.op.stat(entry.path())).unwrap();
@@ -266,9 +304,9 @@ impl Filesystem for DalFs {
                         EntryMode::Unknown => continue,
                     };
                 }
-            },
+            }
             // already read directory into cache
-            true => {},
+            true => {}
         };
 
         // Read from cache for visited and non-visited to keep the order
@@ -277,43 +315,65 @@ impl Filesystem for DalFs {
                 Ok((filename, attr)) => {
                     let _ = reply.add(attr.ino, i as i64 + offset + 2, attr.kind, &filename);
                 }
-                Err(err) => { return reply.error(err); }
+                Err(err) => {
+                    return reply.error(err);
+                }
             }
         }
 
         // Mark this node visited
         let inodes = &mut self.inodes;
-        let dir_inode = inodes.get_mut(ino).expect("inode missing for dir just listed");
+        let dir_inode = inodes
+            .get_mut(ino)
+            .expect("inode missing for dir just listed");
         dir_inode.visited = true;
 
         reply.ok();
     }
 
-    fn mknod(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, _umask: u32, _rdev: u32, reply: ReplyEntry) {
-        log::debug!("mknod(parent={}, name={:?}, mode=0o{:o})", parent, name, _mode);
+    fn mknod(
+        &mut self,
+        _req: &Request,
+        parent: u64,
+        name: &OsStr,
+        _mode: u32,
+        _umask: u32,
+        _rdev: u32,
+        reply: ReplyEntry,
+    ) {
+        log::debug!(
+            "mknod(parent={}, name={:?}, mode=0o{:o})",
+            parent,
+            name,
+            _mode
+        );
 
         // TODO: check if we have write access to this dir in OpenDAL
         let path = self.inodes[parent].path.join(&name);
-        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
 
         let mut meta = Metadata::new(EntryMode::FILE);
-        meta.set_last_modified(
-            parse_datetime_from_from_timestamp_millis(
-                now.as_secs() as i64 * 1000 + now.subsec_millis() as i64
-            )
-        );
+        meta.set_last_modified(parse_datetime_from_from_timestamp_millis(
+            now.as_secs() as i64 * 1000 + now.subsec_millis() as i64,
+        ));
         meta.set_content_length(0);
 
         // FIXME: cloning because it's quick-and-dirty
-        let attr = self.inodes.insert_metadata(&Path::new(&path), &meta).attr.clone();
+        let attr = self
+            .inodes
+            .insert_metadata(&Path::new(&path), &meta)
+            .attr
+            .clone();
 
         let path_str = path.to_str().unwrap();
-        match block_on(self.op.write(path_str, vec!())) {
+        match block_on(self.op.write(path_str, vec![])) {
             Ok(_) => reply.entry(&TTL, &attr, 0),
             Err(err) => {
                 log::warn!("Creating node failed due to {:?}", err);
                 reply.error(ENOENT);
-            },
+            }
         };
     }
 
@@ -324,15 +384,37 @@ impl Filesystem for DalFs {
             Some(_) => {
                 // TODO: Create reader and/or writer
                 reply.opened(0, flags as u32);
-            },
+            }
             None => reply.error(ENOENT),
         };
     }
 
-    fn setattr(&mut self, _req: &Request, ino: u64, _mode: Option<u32>, uid: Option<u32>, gid: Option<u32>,
-        size: Option<u64>, _atime: Option<TimeOrNow>, _mtime: Option<TimeOrNow>, _ctime: Option<SystemTime>, _fh: Option<u64>,
-        _crtime: Option<SystemTime>, _chgtime: Option<SystemTime>, _bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
-        log::debug!("setattr(ino={}, mode={:?}, size={:?}, fh={:?}, flags={:?})", ino, _mode, size, _fh, flags);
+    fn setattr(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        _mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        _atime: Option<TimeOrNow>,
+        _mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        _fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        log::debug!(
+            "setattr(ino={}, mode={:?}, size={:?}, fh={:?}, flags={:?})",
+            ino,
+            _mode,
+            size,
+            _fh,
+            flags
+        );
         match self.inodes.get_mut(ino) {
             Some(inode) => {
                 if let Some(new_size) = size {
@@ -347,15 +429,34 @@ impl Filesystem for DalFs {
                 // TODO: is mode (u32) equivalent to attr.perm (u16)?
                 reply.attr(&TTL, &inode.attr);
             }
-            None => reply.error(ENOENT)
+            None => reply.error(ENOENT),
         }
     }
 
-    fn write(&mut self, _req: &Request, ino: u64, fh: u64, offset: i64, data: &[u8], _write_flags: u32, flags: i32, _lock_owner: Option<u64>, reply: ReplyWrite) {
+    fn write(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        data: &[u8],
+        _write_flags: u32,
+        flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyWrite,
+    ) {
         // TODO: check if in read-only mode: reply EROFS
-        log::debug!("write(ino={}, fh={}, offset={}, len={}, flags=0x{:x})", ino, fh, offset, data.len(), flags);
+        log::debug!(
+            "write(ino={}, fh={}, offset={}, len={}, flags=0x{:x})",
+            ino,
+            fh,
+            offset,
+            data.len(),
+            flags
+        );
 
-        let is_replace = (offset == 0) && (self.inodes.get(ino).unwrap().attr.size < data.len() as u64);
+        let is_replace =
+            (offset == 0) && (self.inodes.get(ino).unwrap().attr.size < data.len() as u64);
 
         // Open a reader and flush all data to writer if not replace
         if !is_replace {
@@ -368,7 +469,7 @@ impl Filesystem for DalFs {
                             log::warn!("Reading failed due to {:?}", err);
                             reply.error(ENOENT);
                             return;
-                        },
+                        }
                     };
                     let mut new_size = original_data.len() as u64;
                     // TODO: Validate the length
@@ -379,32 +480,33 @@ impl Filesystem for DalFs {
                             log::warn!("Writing failed due to {:?}", err);
                             reply.error(ENOENT);
                             return;
-                        },
+                        }
                     };
 
                     let _ = block_on(writer.write(original_data));
                     // Write new content
-                    new_size = new_size + match block_on(writer.write(data.to_vec())) {
-                        Ok(_) => {
-                            reply.written(data.len() as u32);
-                            data.len() as u64
-                        },
-                        Err(err) => {
-                            log::warn!("Writing failed due to {:?}", err);
-                            reply.error(ENOENT);
-                            0
-                        },
-                    };
+                    new_size = new_size
+                        + match block_on(writer.write(data.to_vec())) {
+                            Ok(_) => {
+                                reply.written(data.len() as u32);
+                                data.len() as u64
+                            }
+                            Err(err) => {
+                                log::warn!("Writing failed due to {:?}", err);
+                                reply.error(ENOENT);
+                                0
+                            }
+                        };
 
                     let _ = writer.close();
                     inode.attr.size = new_size;
                     return;
-                },
+                }
                 None => {
                     log::debug!("reading failed");
                     reply.error(ENOENT);
                     return;
-                },
+                }
             }
         } else {
             // Replace the file
@@ -414,19 +516,19 @@ impl Filesystem for DalFs {
                         Ok(_) => {
                             reply.written(data.len() as u32);
                             data.len() as u64
-                        },
+                        }
                         Err(err) => {
                             log::warn!("Writing failed due to {:?}", err);
                             reply.error(ENOENT);
                             0
-                        },
+                        }
                     }
-                },
+                }
                 None => {
                     log::debug!("write failed to read file");
                     reply.error(ENOENT);
                     return;
-                },
+                }
             };
 
             let ref mut inode = self.inodes[ino];
@@ -434,20 +536,57 @@ impl Filesystem for DalFs {
         }
     }
 
-    fn flush(&mut self, _req: &Request<'_>, ino: u64, fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
+    fn flush(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        fh: u64,
+        _lock_owner: u64,
+        reply: ReplyEmpty,
+    ) {
         log::debug!("flush(ino={}, fh={})", ino, fh);
         // TODO: find a way to flush reader and/or writer
         reply.error(ENOSYS);
     }
 
-    fn release(&mut self, _req: &Request<'_>, ino: u64, fh: u64, flags: i32, _lock_owner: Option<u64>, flush: bool, reply: ReplyEmpty) {
-        log::debug!("release(ino={}, fh={}, flags={}, flush={})", ino, fh, flags, flush);
+    fn release(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        fh: u64,
+        flags: i32,
+        _lock_owner: Option<u64>,
+        flush: bool,
+        reply: ReplyEmpty,
+    ) {
+        log::debug!(
+            "release(ino={}, fh={}, flags={}, flush={})",
+            ino,
+            fh,
+            flags,
+            flush
+        );
         // TODO: close writer and reader
         reply.ok();
     }
 
-    fn rename(&mut self, _req: &Request, parent: u64, name: &OsStr, newparent: u64, newname: &OsStr, _flags: u32, reply: ReplyEmpty) {
-        log::debug!("rename(p={}, name={:?}, newp={}, newname={:?})", parent, name, newparent, newname);
+    fn rename(
+        &mut self,
+        _req: &Request,
+        parent: u64,
+        name: &OsStr,
+        newparent: u64,
+        newname: &OsStr,
+        _flags: u32,
+        reply: ReplyEmpty,
+    ) {
+        log::debug!(
+            "rename(p={}, name={:?}, newp={}, newname={:?})",
+            parent,
+            name,
+            newparent,
+            newname
+        );
         let old_path_ref = self.inodes[parent].path.join(&name);
         let old_path = old_path_ref.to_str().unwrap();
         match block_on(self.op.reader(old_path)) {
@@ -462,17 +601,17 @@ impl Filesystem for DalFs {
                             log::warn!("Renaming failed");
                         }
                         let _ = block_on(writer.close());
-                    },
+                    }
                     Err(err) => {
                         log::warn!("Renaming failed due to {:?}", err);
                         return reply.error(ENOENT);
-                    },
+                    }
                 };
-            },
+            }
             Err(err) => {
                 log::warn!("Renaming failed due to {:?}", err);
                 return reply.error(ENOENT);
-            },
+            }
         };
         // Update the node
         match block_on(self.op.delete(old_path)) {
@@ -481,21 +620,23 @@ impl Filesystem for DalFs {
                     Ok(_) => {
                         // Mark unvisited
                         let inodes = &mut self.inodes;
-                        let dir_inode = inodes.get_mut(parent).expect("inode missing for dir just listed");
+                        let dir_inode = inodes
+                            .get_mut(parent)
+                            .expect("inode missing for dir just listed");
                         dir_inode.visited = false;
 
                         reply.ok()
-                    },
+                    }
                     Err(err) => {
                         log::warn!("Renaming failed due to {:?}", err);
                         reply.error(EIO);
                     }
                 }
-            },
+            }
             Err(err) => {
                 log::warn!("Renaming failed due to {:?}", err);
                 reply.error(EIO)
-            },
+            }
         }
     }
 
@@ -503,9 +644,7 @@ impl Filesystem for DalFs {
         log::debug!("unlink(parent={}, name={:?})", parent, name);
 
         match self.remove_inode(parent, name) {
-            Ok(_) => {
-                reply.ok()
-            },
+            Ok(_) => reply.ok(),
             Err(err) => {
                 log::warn!("Removing failed due to {:?}", err);
                 reply.error(EIO);
