@@ -1,21 +1,10 @@
-use clap::{Args, Parser, Subcommand};
+use clap::Parser;
 use opendal::Scheme;
 use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct App {
-    #[command(subcommand)]
-    pub command: Commands,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum Commands {
-    Mount(MountArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct MountArgs {
     pub mount_point: String,
     pub device: Option<String>,
 
