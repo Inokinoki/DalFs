@@ -75,17 +75,17 @@ cargo build
 To run, you will need to provide a series of 
 
 ```bash
-cargo run <mount-point> <scheme> ...
+cargo run --relase -- <mount-point> -t <scheme> ...
 ```
 
 where the `mount-point` is a path to mount the filesystem; `scheme` is an OpenDAL scheme, all in lowercase (e.g. "ftp", "s3", "fs", etc.).
 
-The remaining parameters are `<key>=<value>` pairs needed by OpenDAL schemes.
+The remaining parameters are `<key>=<value>[,<key>=<value>]` pairs needed by OpenDAL schemes.
 
 Currently `fs` and `s3` backends are tested. For example, the following command will mount a filesystem using the data in your `/tmp` directory to the mount-point.
 
 ```bash
-cargo run <mount-point> fs root=/tmp
+cargo run --relase -- <mount-point> -t fs -o root=/tmp
 ```
 
 <img width="1185" alt="image" src="https://github.com/Inokinoki/DalFs/assets/8311300/c591ffe1-be35-4c79-8ffa-368c66872b9f">
@@ -93,7 +93,7 @@ cargo run <mount-point> fs root=/tmp
 And the following mount a filesystem backed by s3:
 
 ```bash
-cargo run <mount-point> s3 root=/tmp endpoint=<end-point-url> bucket=<bucket> access_key_id=<access-key-id> secret_access_key=<secret-access-key> region=auto
+cargo run <mount-point> -t s3 -o root=/tmp,endpoint=<end-point-url>,bucket=<bucket>,access_key_id=<access-key-id>,secret_access_key=<secret-access-key>,region=auto
 ```
 
 For more details and more backends, please check [OpenDAL scheme doc](https://opendal.apache.org/docs/rust/opendal/enum.Scheme.html).
