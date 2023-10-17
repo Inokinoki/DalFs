@@ -6,7 +6,6 @@ use std::{collections::HashMap, str::FromStr};
 #[command(author, version, about, long_about = None)]
 pub struct App {
     pub mount_point: String,
-    pub device: Option<String>,
 
     /// OpenDAL scheme
     #[arg(short, long, value_parser = parse_type)]
