@@ -32,7 +32,7 @@ fn run(config: App) -> Result<(), Box<dyn std::error::Error>> {
         inodes: inode::InodeStore::new(0o550, 1000, 1000), // Temporarilly hardcode
     };
 
-    fuser::mount(fs, config.mount_point, &[])?;
+    fuser::mount2(fs, config.mount_point, &[])?;
 
     Ok(())
 }

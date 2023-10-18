@@ -135,7 +135,6 @@ impl Filesystem for DalFs {
                                 rdev: 0,
                                 flags: 0,
                                 blksize: 4096,
-                                padding: 0,
                             },
                         );
                     }

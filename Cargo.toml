@@ -10,13 +10,11 @@ license = "MIT"
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3"
-opendal = "0.40"
-anyhow = "1.0.75"
-fuser = "0.7"
+opendal = "0.41.0"
+fuser = "0.13.0"
 env_logger = "0.10.0"
 libc = "0.2.147"
-time = "0.1"
-sequence_trie = "0.0.13"
+sequence_trie = "0.3.6"
 chrono = "0.4.30"
 log = "0.4.20"
 clap = { version = "4.4.6", features = ["derive"] }
