@@ -25,10 +25,7 @@ async fn main() -> ExitCode {
 }
 
 fn run(config: App) -> Result<(), Box<dyn std::error::Error>> {
-    let mut options = config.options.unwrap_or_default();
-    if let Some(root) = config.device {
-        options.insert("root".to_string(), root);
-    }
+    let options = config.options.unwrap_or_default();
 
     let fs = dalfs::DalFs {
         op: Operator::via_map(config.r#type, options)?.tap(|op| log::debug!("operator: {op:?}")),
