@@ -62,7 +62,6 @@ impl InodeStore {
             rdev: 0,
             flags: 0,
             blksize: 4096,
-            padding: 0,
         };
 
         store.insert(Inode::new("/", fs_root));
@@ -114,7 +113,6 @@ impl InodeStore {
             rdev: 0,
             flags: 0,
             blksize: 4096,
-            padding: 0,
         };
 
         self.insert(Inode::new(path, attr));
@@ -137,9 +135,9 @@ impl InodeStore {
                     .ino_trie
                     .get_node(&sequence)
                     .expect("inconsistent fs - failed to lookup by path after lookup by ino");
-                node.children
-                    .values()
-                    .filter_map(|ref c| c.value.as_ref())
+                node.children()
+                    .iter()
+                    .filter_map(|c| c.value())
                     .map(|ino| {
                         self.get(*ino)
                             .expect("inconsistent fs - found child without inode")
@@ -198,8 +196,8 @@ impl InodeStore {
             }
         }
 
-        if !self.ino_trie.insert(&sequence, ino) {
-            let node = self.ino_trie.get_mut_node(&sequence).expect(&format!(
+        if self.ino_trie.insert(&sequence, ino).is_some() {
+            let node = self.ino_trie.get_node_mut(&sequence).expect(&format!(
                 "Corrupt inode store: couldn't insert or modify ino_trie at {:?}",
                 &sequence
             ));
@@ -207,7 +205,7 @@ impl InodeStore {
             // if node.value.is_some() {
             //     panic!("Corrupt inode store: reinserted ino {} into ino_trie, prev value: {}", ino, node.value.unwrap());
             // }
-            node.value = Some(ino);
+            node.value_mut().map(|v| *v = ino);
         }
     }
 
