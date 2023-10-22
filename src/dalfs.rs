@@ -243,8 +243,8 @@ impl Filesystem for DalFs {
         let dir_visited = self.inodes.get(ino).map(|n| n.visited).unwrap_or(false);
         if dir_visited {
             let cached_dir = self.cache_readdir(ino);
-            let count = cached_dir.enumerate().count() + 2;
-            if offset as usize > count {
+            let count = cached_dir.enumerate().count();
+            if offset > 0 && offset as usize > count {
                 reply.ok();
                 return;
             }
