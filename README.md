@@ -93,7 +93,7 @@ cargo run --relase -- <mount-point> -t fs -o root=/tmp
 And the following mount a filesystem backed by s3:
 
 ```bash
-cargo run <mount-point> -t s3 -o root=/tmp,endpoint=<end-point-url>,bucket=<bucket>,access_key_id=<access-key-id>,secret_access_key=<secret-access-key>,region=auto
+cargo run <mount-point> -t s3 -o root=<s3-root-path>,endpoint=<end-point-url>,bucket=<bucket>,access_key_id=<access-key-id>,secret_access_key=<secret-access-key>,region=auto
 ```
 
 For more details and more backends, please check [OpenDAL scheme doc](https://opendal.apache.org/docs/rust/opendal/enum.Scheme.html).
