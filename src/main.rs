@@ -1,5 +1,3 @@
-#![feature(lazy_cell)]
-
 use clap::Parser;
 use config::App;
 use fuser::Session;
@@ -11,7 +9,7 @@ use tokio::{
     task::spawn_blocking,
 };
 
-use std::{process::ExitCode, sync::LazyLock};
+use std::process::ExitCode;
 
 use log;
 
@@ -19,18 +17,15 @@ mod config;
 mod dalfs;
 mod inode;
 
-static TASK_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_io()
-        .build()
-        .expect("failed to build tokio runtime")
-});
-
 fn main() -> ExitCode {
     let config = config::App::parse();
     env_logger::init();
 
-    if let Err(e) = TASK_RUNTIME.block_on(run(config)) {
+    if let Err(e) = runtime::Builder::new_multi_thread()
+        .enable_io()
+        .build()
+        .expect("failed to build tokio runtime")
+        .block_on(run(config)) {
         log::error!("{e}");
         return ExitCode::FAILURE;
     }
