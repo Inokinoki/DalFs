@@ -499,7 +499,7 @@ impl Filesystem for DalFs {
                             }
                         };
 
-                    let _ = writer.close();
+                    let _ = runtime().block_on(writer.close());
                     inode.attr.size = new_size;
                     return;
                 }
