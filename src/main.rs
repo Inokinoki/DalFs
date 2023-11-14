@@ -9,7 +9,7 @@ use tokio::{
     task::spawn_blocking,
 };
 
-use std::process::ExitCode;
+use std::{process::ExitCode, sync::OnceLock};
 
 use log;
 
@@ -17,15 +17,23 @@ mod config;
 mod dalfs;
 mod inode;
 
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+#[inline]
+fn runtime() -> &'static Runtime {
+    RUNTIME.get_or_init(|| {
+        runtime::Builder::new_multi_thread()
+            .enable_io()
+            .build()
+            .expect("failed to build tokio runtime")
+    })
+}
+
 fn main() -> ExitCode {
     let config = config::App::parse();
     env_logger::init();
 
-    if let Err(e) = runtime::Builder::new_multi_thread()
-        .enable_io()
-        .build()
-        .expect("failed to build tokio runtime")
-        .block_on(run(config)) {
+    if let Err(e) = runtime().block_on(run(config)) {
         log::error!("{e}");
         return ExitCode::FAILURE;
     }
