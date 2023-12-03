@@ -20,7 +20,7 @@ impl Inode {
     pub fn new<P: AsRef<Path>>(path: P, attr: FileAttr) -> Inode {
         Inode {
             path: PathBuf::from(path.as_ref()),
-            attr: attr,
+            attr,
             visited: false,
         }
     }
@@ -40,8 +40,8 @@ impl InodeStore {
         let mut store = InodeStore {
             inode_map: HashMap::new(),
             ino_trie: SequenceTrie::new(),
-            uid: uid,
-            gid: gid,
+            uid,
+            gid,
             last_ino: 1, // 1 is reserved for root
         };
 
@@ -55,10 +55,10 @@ impl InodeStore {
             ctime: now,
             crtime: now,
             kind: FileType::Directory,
-            perm: perm,
+            perm,
             nlink: 0,
-            uid: uid,
-            gid: gid,
+            uid,
+            gid,
             rdev: 0,
             flags: 0,
             blksize: 4096,
@@ -93,7 +93,7 @@ impl InodeStore {
             ts = last_modified_datetime.into();
         }
         let attr = FileAttr {
-            ino: ino,
+            ino,
             size: metadata.content_length(),
             blocks: 0,
             atime: ts,
@@ -197,22 +197,26 @@ impl InodeStore {
         }
 
         if self.ino_trie.insert(&sequence, ino).is_some() {
-            let node = self.ino_trie.get_node_mut(&sequence).expect(&format!(
-                "Corrupt inode store: couldn't insert or modify ino_trie at {:?}",
-                &sequence
-            ));
+            let node = self.ino_trie.get_node_mut(&sequence).unwrap_or_else(|| {
+                panic!(
+                    "Corrupt inode store: couldn't insert or modify ino_trie at {:?}",
+                    &sequence
+                )
+            });
             // TODO: figure out why this check triggers a false alarm panic on backspacing to dir and then tabbing
             // if node.value.is_some() {
             //     panic!("Corrupt inode store: reinserted ino {} into ino_trie, prev value: {}", ino, node.value.unwrap());
             // }
-            node.value_mut().map(|v| *v = ino);
+            if let Some(v) = node.value_mut() {
+                *v = ino;
+            }
         }
     }
 
     pub fn remove(&mut self, ino: u64) {
         let sequence = {
-            let ref path = self.inode_map[&ino].path;
-            path_to_sequence(&path)
+            let path = &self.inode_map[&ino].path;
+            path_to_sequence(path)
         };
 
         self.inode_map.remove(&ino);
@@ -226,13 +230,13 @@ impl InodeStore {
 impl Index<u64> for InodeStore {
     type Output = Inode;
 
-    fn index<'a>(&'a self, index: u64) -> &'a Inode {
+    fn index(&self, index: u64) -> &Inode {
         self.get(index).unwrap()
     }
 }
 
 impl IndexMut<u64> for InodeStore {
-    fn index_mut<'a>(&'a mut self, index: u64) -> &'a mut Inode {
+    fn index_mut(&mut self, index: u64) -> &mut Inode {
         self.get_mut(index).unwrap()
     }
 }

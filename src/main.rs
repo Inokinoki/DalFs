@@ -11,8 +11,6 @@ use tokio::{
 
 use std::{process::ExitCode, sync::OnceLock};
 
-use log;
-
 mod config;
 mod dalfs;
 mod inode;
