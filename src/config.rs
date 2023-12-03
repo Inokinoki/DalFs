@@ -21,7 +21,7 @@ fn parse_options(raw: &str) -> Result<HashMap<String, String>, String> {
         .map(|kv| {
             kv.split_once('=')
                 .map(|(k, v)| (k.to_string(), v.to_string()))
-                .ok_or(String::from("Invalid key value format".to_string()))
+                .ok_or("Invalid key value format".to_string())
         })
         .collect::<Result<HashMap<String, String>, String>>()
 }

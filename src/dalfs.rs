@@ -7,8 +7,6 @@ use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::Operator;
 
-use futures::executor::block_on;
-
 use libc::EACCES;
 use libc::EIO;
 use libc::ENOENT;
@@ -22,9 +20,8 @@ use chrono::Utc;
 use std::result::Result;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use log;
-
 use crate::inode;
+use crate::runtime;
 
 const TTL: Duration = Duration::from_secs(1); // 1 second
 
@@ -56,19 +53,19 @@ impl DalFs {
             .inodes
             .children(ino)
             .into_iter()
-            .map(move |child| Ok((get_basename(&child.path).into(), child.attr.clone())));
+            .map(move |child| Ok((get_basename(&child.path).into(), child.attr)));
         Box::new(iter)
     }
 
     fn remove_inode(&mut self, parent: u64, name: &OsStr) -> Result<(), i32> {
-        let ino_opt = self.inodes.child(parent, &name).map(|inode| inode.attr.ino);
-        let path_ref = self.inodes[parent].path.join(&name);
+        let ino_opt = self.inodes.child(parent, name).map(|inode| inode.attr.ino);
+        let path_ref = self.inodes[parent].path.join(name);
         let path = path_ref.to_str().unwrap();
-        match block_on(self.op.delete(path)) {
+        match runtime().block_on(self.op.delete(path)) {
             Ok(_) => {
-                ino_opt.map(|ino| {
+                if let Some(ino) = ino_opt {
                     self.inodes.remove(ino);
-                });
+                }
                 Ok(())
             }
             Err(err) => {
@@ -84,17 +81,12 @@ impl Filesystem for DalFs {
         let name_str = name.to_str().unwrap();
         log::debug!("lookup(parent={}, name=\"{}\")", parent, name_str);
 
-        match self.inodes.child(parent, &name).cloned() {
+        match self.inodes.child(parent, name).cloned() {
             Some(child_inode) => reply.entry(&TTL, &child_inode.attr, 0),
             None => {
                 let parent_inode = self.inodes[parent].clone();
-                let child_path = parent_inode
-                    .path
-                    .join(&name)
-                    .as_path()
-                    .display()
-                    .to_string();
-                match block_on(self.op.stat(&child_path)) {
+                let child_path = parent_inode.path.join(name).as_path().display().to_string();
+                match runtime().block_on(self.op.stat(&child_path)) {
                     Ok(child_metadata) => {
                         let inode = self.inodes.insert_metadata(&child_path, &child_metadata);
                         reply.entry(&TTL, &inode.attr, 0)
@@ -113,34 +105,32 @@ impl Filesystem for DalFs {
 
         let create_time: SystemTime = SystemTime::now();
         // TODO: Allow to read more attr
-        match ino {
-            _ => {
-                match self.inodes.get(ino) {
-                    Some(inode) => {
-                        reply.attr(
-                            &TTL,
-                            &FileAttr {
-                                ino: ino,
-                                size: 0,
-                                blocks: 0,
-                                atime: create_time,
-                                mtime: create_time,
-                                ctime: create_time,
-                                crtime: create_time,
-                                kind: inode.attr.kind,
-                                perm: 0o755,
-                                nlink: 2,
-                                uid: 1000,
-                                gid: 1000,
-                                rdev: 0,
-                                flags: 0,
-                                blksize: 4096,
-                            },
-                        );
-                    }
-                    None => reply.error(ENOENT),
-                };
-            }
+        {
+            match self.inodes.get(ino) {
+                Some(inode) => {
+                    reply.attr(
+                        &TTL,
+                        &FileAttr {
+                            ino,
+                            size: 0,
+                            blocks: 0,
+                            atime: create_time,
+                            mtime: create_time,
+                            ctime: create_time,
+                            crtime: create_time,
+                            kind: inode.attr.kind,
+                            perm: 0o755,
+                            nlink: 2,
+                            uid: 1000,
+                            gid: 1000,
+                            rdev: 0,
+                            flags: 0,
+                            blksize: 4096,
+                        },
+                    );
+                }
+                None => reply.error(ENOENT),
+            };
         }
     }
 
@@ -166,7 +156,7 @@ impl Filesystem for DalFs {
         match self.inodes.get(ino) {
             Some(inode) => {
                 let path = Path::new(&inode.path);
-                let result = block_on(self.op.read(path.to_str().unwrap()));
+                let result = runtime().block_on(self.op.read(path.to_str().unwrap()));
 
                 match result {
                     Ok(buffer) => {
@@ -214,12 +204,12 @@ impl Filesystem for DalFs {
             _mode
         );
 
-        let path_ref = self.inodes[parent].path.join(&name);
+        let path_ref = self.inodes[parent].path.join(name);
         let path = path_ref.to_str().unwrap();
-        match block_on(self.op.create_dir(&(path.to_string() + "/"))) {
+        match runtime().block_on(self.op.create_dir(&(path.to_string() + "/"))) {
             Ok(_) => {
                 let meta = Metadata::new(EntryMode::DIR);
-                let mut attr = self.inodes.insert_metadata(&path, &meta).attr;
+                let mut attr = self.inodes.insert_metadata(path, &meta).attr;
                 attr.perm = _mode as u16;
                 reply.entry(&TTL, &attr, 0);
             }
@@ -277,9 +267,10 @@ impl Filesystem for DalFs {
         match dir_visited {
             // read directory from OpenDAL and save to cache
             false => {
-                let ref parent_path = self.inodes[ino].path.clone();
+                let parent_path = &self.inodes[ino].path.clone();
 
-                let entries = match block_on(self.op.list(parent_path.to_str().unwrap())) {
+                let entries = match runtime().block_on(self.op.list(parent_path.to_str().unwrap()))
+                {
                     Ok(entries) => entries,
                     Err(error) => {
                         log::warn!("readdir failed due to {:?}", error);
@@ -287,7 +278,7 @@ impl Filesystem for DalFs {
                     }
                 };
                 for (_, entry) in entries.into_iter().enumerate().skip(offset as usize) {
-                    let metadata = block_on(self.op.stat(entry.path())).unwrap();
+                    let metadata = runtime().block_on(self.op.stat(entry.path())).unwrap();
                     let child_path = parent_path.join(entry.name());
                     let _inode = self.inodes.insert_metadata(&child_path, &metadata);
 
@@ -348,7 +339,7 @@ impl Filesystem for DalFs {
         );
 
         // TODO: check if we have write access to this dir in OpenDAL
-        let path = self.inodes[parent].path.join(&name);
+        let path = self.inodes[parent].path.join(name);
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
@@ -360,14 +351,10 @@ impl Filesystem for DalFs {
         meta.set_content_length(0);
 
         // FIXME: cloning because it's quick-and-dirty
-        let attr = self
-            .inodes
-            .insert_metadata(&Path::new(&path), &meta)
-            .attr
-            .clone();
+        let attr = self.inodes.insert_metadata(Path::new(&path), &meta).attr;
 
         let path_str = path.to_str().unwrap();
-        match block_on(self.op.write(path_str, vec![])) {
+        match runtime().block_on(self.op.write(path_str, vec![])) {
             Ok(_) => reply.entry(&TTL, &attr, 0),
             Err(err) => {
                 log::warn!("Creating node failed due to {:?}", err);
@@ -462,56 +449,57 @@ impl Filesystem for DalFs {
             match self.inodes.get_mut(ino) {
                 Some(inode) => {
                     // We assume to have reading perm with writing perm
-                    let original_data = match block_on(self.op.read(inode.path.to_str().unwrap())) {
-                        Ok(d) => d, // TODO: Do not copy all data
-                        Err(err) => {
-                            log::warn!("Reading failed due to {:?}", err);
-                            reply.error(ENOENT);
-                            return;
-                        }
-                    };
+                    let original_data =
+                        match runtime().block_on(self.op.read(inode.path.to_str().unwrap())) {
+                            Ok(d) => d, // TODO: Do not copy all data
+                            Err(err) => {
+                                log::warn!("Reading failed due to {:?}", err);
+                                reply.error(ENOENT);
+                                return;
+                            }
+                        };
                     let mut new_size = original_data.len() as u64;
                     // TODO: Validate the length
 
-                    let mut writer = match block_on(self.op.writer(inode.path.to_str().unwrap())) {
-                        Ok(writer) => writer,
-                        Err(err) => {
-                            log::warn!("Writing failed due to {:?}", err);
-                            reply.error(ENOENT);
-                            return;
-                        }
-                    };
-
-                    let _ = block_on(writer.write(original_data));
-                    // Write new content
-                    new_size = new_size
-                        + match block_on(writer.write(data.to_vec())) {
-                            Ok(_) => {
-                                reply.written(data.len() as u32);
-                                data.len() as u64
-                            }
+                    let mut writer =
+                        match runtime().block_on(self.op.writer(inode.path.to_str().unwrap())) {
+                            Ok(writer) => writer,
                             Err(err) => {
                                 log::warn!("Writing failed due to {:?}", err);
                                 reply.error(ENOENT);
-                                0
+                                return;
                             }
                         };
 
-                    let _ = writer.close();
+                    let _ = runtime().block_on(writer.write(original_data));
+                    // Write new content
+                    new_size += match runtime().block_on(writer.write(data.to_vec())) {
+                        Ok(_) => {
+                            reply.written(data.len() as u32);
+                            data.len() as u64
+                        }
+                        Err(err) => {
+                            log::warn!("Writing failed due to {:?}", err);
+                            reply.error(ENOENT);
+                            0
+                        }
+                    };
+
+                    let _ = runtime().block_on(writer.close());
                     inode.attr.size = new_size;
-                    return;
                 }
                 None => {
                     log::debug!("reading failed");
                     reply.error(ENOENT);
-                    return;
                 }
             }
         } else {
             // Replace the file
             let new_size = match self.inodes.get_mut(ino) {
                 Some(inode) => {
-                    match block_on(self.op.write(inode.path.to_str().unwrap(), data.to_vec())) {
+                    match runtime()
+                        .block_on(self.op.write(inode.path.to_str().unwrap(), data.to_vec()))
+                    {
                         Ok(_) => {
                             reply.written(data.len() as u32);
                             data.len() as u64
@@ -530,7 +518,7 @@ impl Filesystem for DalFs {
                 }
             };
 
-            let ref mut inode = self.inodes[ino];
+            let inode = &mut self.inodes[ino];
             inode.attr.size = new_size;
         }
     }
@@ -586,20 +574,23 @@ impl Filesystem for DalFs {
             newparent,
             newname
         );
-        let old_path_ref = self.inodes[parent].path.join(&name);
+        let old_path_ref = self.inodes[parent].path.join(name);
         let old_path = old_path_ref.to_str().unwrap();
-        match block_on(self.op.reader(old_path)) {
+        match runtime().block_on(self.op.reader(old_path)) {
             Ok(reader) => {
-                let buf_reader = futures::io::BufReader::with_capacity(8 * 1024 * 1024, reader);
+                let mut buf_reader = tokio::io::BufReader::with_capacity(8 * 1024 * 1024, reader);
 
-                let path_ref = self.inodes[newparent].path.join(&newname);
+                let path_ref = self.inodes[newparent].path.join(newname);
                 let path = path_ref.to_str().unwrap();
-                match block_on(self.op.writer(path)) {
+                match runtime().block_on(self.op.writer(path)) {
                     Ok(mut writer) => {
-                        if block_on(futures::io::copy_buf(buf_reader, &mut writer)).is_err() {
+                        if runtime()
+                            .block_on(tokio::io::copy_buf(&mut buf_reader, &mut writer))
+                            .is_err()
+                        {
                             log::warn!("Renaming failed");
                         }
-                        let _ = block_on(writer.close());
+                        let _ = runtime().block_on(writer.close());
                     }
                     Err(err) => {
                         log::warn!("Renaming failed due to {:?}", err);
@@ -613,7 +604,7 @@ impl Filesystem for DalFs {
             }
         };
         // Update the node
-        match block_on(self.op.delete(old_path)) {
+        match runtime().block_on(self.op.delete(old_path)) {
             Ok(_) => {
                 match self.remove_inode(parent, name) {
                     Ok(_) => {
